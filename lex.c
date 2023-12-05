@@ -90,20 +90,6 @@ peekc(void)
 	return c;
 }
 
-static int
-skipwhite()
-{
-	char c = peekc();
-	if (c != ' ' && c != '\t') {
-		return 0;
-	}
-	do {
-		forward();
-		c = peekc();
-	} while (c == ' ' || c == '\t');
-	return 1;
-}
-
 void
 printtok(FILE *o, Tok t)
 {
