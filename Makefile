@@ -24,5 +24,8 @@ clean:
 tests: lex
 	sh tests/test-lex.sh
 
-.PHONY: all clean format
+rebuild-test:
+	sh tests/build-test-lex.sh
+
+.PHONY: all clean format rebuild-test
 
