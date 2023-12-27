@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <ctype.h>
+#include <assert.h>
 
 #define BUFSZ 512
 
@@ -151,6 +152,22 @@ char *tokenstrs[] = {
 	[UNDEFINED]  = "UNDEFINED",
 };
 
+#ifdef DEBUG
+int identsz = 0;
+char* IDENTIFIER_STACK[1024] = {0};
+int immedsz = 0;
+int64_t IMMEDIATE_STACK[1024] = {0};
+#endif // DEBUG
+
+char*
+strdup(const char *s)
+{
+	int len = strlen(s);
+	char *d = calloc(len, sizeof(char));
+	strcpy(d, s);
+	return d;
+}
+
 void
 forward(void)
 {
@@ -206,6 +223,24 @@ printtok(FILE *o, Tok t)
 	fprintf(o, "%s(%d)\n", tokenstrs[t.type], t.type);
 }
 
+#ifdef DEBUG
+void
+printident(FILE *o)
+{
+	for (int i = 0; i < identsz; i++) {
+		fprintf(o, "%s\n", IDENTIFIER_STACK[i]);
+	}
+}
+
+void
+printimmed(FILE *o)
+{
+	for (int i = 0; i < immedsz; i++) {
+		fprintf(o, "%ld\n", IMMEDIATE_STACK[i]);
+	}
+}
+#endif // DEBUG
+
 // TODO(all): find a way to save the IMMEDIATE.
 void
 peek_float(int64_t n)
@@ -220,13 +255,16 @@ peek_float(int64_t n)
 		val += ic;
 		c = peekc();
 	}
+#ifdef DEBUG
+	IMMEDIATE_STACK[immedsz++] = n;
+#endif
 }
 
-int64_t
-peek_dec(int sign)
+void
+peek_dec(int sign, char c)
 {
-	int64_t val = 0;
-	char c = peekc();
+	int64_t val = c - '0';
+	c = peekc();
 	while (c >= '0' && c <= '9') {
 		forward();
 		int ic = c - '0';
@@ -239,11 +277,15 @@ peek_dec(int sign)
 	if (c == '.') {
 		forward();
 		peek_float(val);
+		return;
 	}
-	return val;
+
+#ifdef DEBUG
+	IMMEDIATE_STACK[immedsz++] = val;
+#endif // DEBUG
 }
 
-int64_t
+void
 peek_bin()
 {
 	int64_t val = 0;
@@ -257,10 +299,12 @@ peek_bin()
 		c = peekc();
 	}
 
-	return val;
+#ifdef DEBUG
+	IMMEDIATE_STACK[immedsz++] = val;
+#endif // DEBUG
 }
 
-int64_t
+void
 peek_hex()
 {
 	int64_t val = 0;
@@ -284,7 +328,9 @@ peek_hex()
 		val += ic;
 	}
 
-	return val;
+#ifdef DEBUG
+	IMMEDIATE_STACK[immedsz++] = val;
+#endif // DEBUG
 }
 
 void
@@ -293,27 +339,22 @@ peek_immediate(char c)
 {
 	// Can be hex bin or dec
 	if (c == '0') {
-		c = peekc();
+		char c = peekc();
 
 		if (c == 'X' || c == 'x') {
 			forward();
 			peek_hex();
+			return;
 		}
 
 		if (c == 'B' || c == 'b') {
 			forward();
 			peek_bin();
-		}
-
-		if (c >= '0' && c <= '9') {
-			peek_dec(1);
+			return;
 		}
 	}
 
-	// Standard:
-	if (c >= '1' && c <= '9') {
-		peek_dec(1);
-	}
+	peek_dec(1, c);
 }
 
 void
@@ -459,7 +500,7 @@ peek()
 			tok.type = SUB_ASSIGN;
 		} else if (c >= '0' && c <= '9') {
 			forward();
-			peek_immediate(c);
+			peek_dec(-1, c);
 			tok.type = IMMEDIATE;
 		} else {
 			tok.type = SUB;
@@ -524,6 +565,9 @@ peek()
 			}
 			if (i == NKEYWORDS) {
 				tok.type = IDENTIFIER;
+#ifdef DEBUG
+				IDENTIFIER_STACK[identsz++] = strdup(buf);
+#endif // DEBUG
 				// TODO(ghuter): save the buffer somewhere, link it to the token
 			}
 		}
@@ -555,5 +599,9 @@ main(int argc, char *argv[])
 		t = getnext();
 		printtok(stdout, t);
 	} while (t.type != EOI);
+#ifdef DEBUG
+	printident(stdout);
+	printimmed(stdout);
+#endif // DEBUG
 }
 
