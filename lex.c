@@ -227,6 +227,7 @@ printtok(FILE *o, Tok t)
 void
 printident(FILE *o)
 {
+	fprintf(o, "IDENTIFIER_STACK:\n");
 	for (int i = 0; i < identsz; i++) {
 		fprintf(o, "%s\n", IDENTIFIER_STACK[i]);
 	}
@@ -235,6 +236,7 @@ printident(FILE *o)
 void
 printimmed(FILE *o)
 {
+	fprintf(o, "IMMEDIATE_STACK:\n");
 	for (int i = 0; i < immedsz; i++) {
 		fprintf(o, "%ld\n", IMMEDIATE_STACK[i]);
 	}
@@ -365,7 +367,7 @@ peek_identifier(char *buf, char c)
 		buf[len++] = c;
 		c = peekc();
 
-		if (!(isalnum(c) || c == 'c')) {
+		if (!(isalnum(c) || c == '_')) {
 			break;
 		}
 		forward();
