@@ -18,6 +18,11 @@ format:
 
 clean:
 	rm -f lex lex.o
+	rm -f tests/*.err
+	rm -f tests/*.res
+
+tests: lex
+	sh tests/test-lex.sh
 
 .PHONY: all clean format
 

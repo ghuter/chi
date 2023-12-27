@@ -1,2 +1,4 @@
 lex
 *.o
+tests/*.res
+tests/*.err

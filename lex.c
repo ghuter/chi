@@ -20,6 +20,7 @@ typedef enum {
 	NTOK, // must be the last of "regular tokens"
 
 	FOR,
+	IF,
 	NKEYWORDS, // must be the last "keyword"
 } ETok;
 
@@ -29,11 +30,13 @@ typedef struct {
 
 char *keywords[] = {
 	[FOR] = "for",
+	[IF] = "if",
 };
 
 char *tokenstrs[] = {
 	[EOI]        = "EOI",
 	[FOR]        = "FOR",
+	[IF]         = "IF",
 	[IDENTIFIER] = "IDENTIFIER",
 	[NEWLINE]    = "NEWLINE",
 	[SEMICOLON]  = "SEMICOLON",
