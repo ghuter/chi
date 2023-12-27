@@ -73,6 +73,7 @@ typedef enum {
 	IF,
 	STRUCT,
 	SIZEOF,
+	RETURN,
 	NKEYWORDS, // must be the last "keyword"
 } ETok;
 
@@ -85,6 +86,7 @@ char *keywords[] = {
 	[IF]     = "if",
 	[STRUCT] = "struct",
 	[SIZEOF] = "sizeof",
+	[RETURN] = "return",
 };
 
 char *tokenstrs[] = {
@@ -93,6 +95,7 @@ char *tokenstrs[] = {
 	[IF]         = "IF",
 	[STRUCT]     = "STRUCT",
 	[SIZEOF]     = "SIZEOF",
+	[RETURN]     = "RETURN",
 
 	[IMMEDIATE]	 = "IMMEDIATE",
 	[IDENTIFIER] = "IDENTIFIER",
@@ -205,7 +208,8 @@ printtok(FILE *o, Tok t)
 
 // TODO(all): find a way to save the IMMEDIATE.
 void
-peek_float(int64_t n) {
+peek_float(int64_t n)
+{
 	(void) n;
 	int64_t val = 0;
 	char c = peekc();
@@ -219,7 +223,8 @@ peek_float(int64_t n) {
 }
 
 int64_t
-peek_dec(int sign) {
+peek_dec(int sign)
+{
 	int64_t val = 0;
 	char c = peekc();
 	while (c >= '0' && c <= '9') {
@@ -388,8 +393,9 @@ peek()
 		if (c >= '0' && c <= '9') {
 			peek_float(0);
 			tok.type = IMMEDIATE;
+		} else {
+			tok.type = DOT;
 		}
-		else tok.type = DOT;
 		break;
 	case '<':
 		c = peekc();
@@ -451,13 +457,13 @@ peek()
 		if (c == '=') {
 			forward();
 			tok.type = SUB_ASSIGN;
-		}
-		else if (c >= '0' && c <= '9') {
+		} else if (c >= '0' && c <= '9') {
 			forward();
 			peek_immediate(c);
 			tok.type = IMMEDIATE;
+		} else {
+			tok.type = SUB;
 		}
-		else tok.type = SUB;
 		break;
 	case '&':
 		c = peekc();
