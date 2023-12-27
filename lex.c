@@ -22,6 +22,7 @@ typedef enum {
 	SPC,
 	COLON,
 	COMMA,
+	DOT,
 	LPAREN,
 	RPAREN,
 	LBRACKETS,
@@ -100,6 +101,7 @@ char *tokenstrs[] = {
 	[SPC]        = "SPC",
 	[COLON]      = "COLON",
 	[COMMA]      = "COMMA",
+	[DOT]		 = "DOT",
 	[LPAREN]     = "LPAREN",
 	[RPAREN]     = "RPAREN",
 	[LBRACKETS]  = "LBRACKETS",
@@ -383,6 +385,14 @@ peek()
 		break;
 	case '}':
 		tok.type = RBRACES;
+		break;
+	case '.':
+		c = peekc();
+		if (c >= '0' && c <= '9') {
+			peek_float(0);
+			tok.type = IMMEDIATE;
+		}
+		else tok.type = DOT;
 		break;
 	case '<':
 		c = peekc();
