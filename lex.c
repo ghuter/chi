@@ -103,8 +103,9 @@ peek()
 	char buf[64];
 	char c;
 
-	if (hold)
+	if (hold) {
 		return tok;
+	}
 	hold = 1;
 
 	memset(&tok, 0, sizeof(tok));
@@ -131,34 +132,37 @@ peek()
 		tok.type = NEWLINE;
 		break;
 	default: {
-			int len = 0;
-			while (9) {
-				buf[len++] = c;
-				c = peekc();
+		int len = 0;
+		while (9) {
+			buf[len++] = c;
+			c = peekc();
 
-				if (c == EOF)
-					break;
-				// word character
-				if (strchr(" '\t\n#;&|^$`{}()<>=", c))
-					break;
+			if (c == EOF) {
+				break;
+			}
+			// word character
+			if (strchr(" '\t\n#;&|^$`{}()<>=", c)) {
+				break;
+			}
 
-				forward();
-			}
-			buf[len++] = 0;
+			forward();
+		}
+		buf[len++] = 0;
 
-			int i;
-			for (i = NTOK + 1; i < NKEYWORDS; i++) {
-				/* fprintf(stderr, "(i == %d) comparing '%s' to '%s'..\n", i, buf, keywords[i]); */
-				if (strcmp(buf, keywords[i]) == 0) {
-					tok.type = i;
-					break;
-				}
+		int i;
+		for (i = NTOK + 1; i < NKEYWORDS; i++) {
+			/* fprintf(stderr, "(i == %d) comparing '%s' to '%s'..\n", i, buf, keywords[i]); */
+			if (strcmp(buf, keywords[i]) == 0) {
+				tok.type = i;
+				break;
 			}
-			if (i == NKEYWORDS) {
-				tok.type = IDENTIFIER;
-				// TODO(ghuter): save the buffer somewhere, link it to the token
-			}
-		} break;
+		}
+		if (i == NKEYWORDS) {
+			tok.type = IDENTIFIER;
+			// TODO(ghuter): save the buffer somewhere, link it to the token
+		}
+	}
+	break;
 	}
 
 	return tok;

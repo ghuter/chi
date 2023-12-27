@@ -13,8 +13,11 @@ lex: lex.o
 .c.o:
 	$(CC) $(CFLAGS) -c $@ $<
 
+format:
+	astyle -q -Z -n -A3 -t8 -p -xg -H -j -xB *.[ch]
+
 clean:
 	rm -f lex lex.o
 
-.PHONY: all clean
+.PHONY: all clean format
 
