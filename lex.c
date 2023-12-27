@@ -362,9 +362,6 @@ peek()
 	case ':':
 		tok.type = COLON;
 		break;
-	case '=':
-		tok.type = EQUAL;
-		break;
 	case ',':
 		tok.type = COMMA;
 		break;
@@ -440,6 +437,7 @@ peek()
 		else tok.type = _val1;			\
 		break;
 
+		CASE2('=', '=', ASSIGN, EQUAL)
 		CASE2('!', '=', LNOT, NEQUAL)
 		CASE2('+', '=', ADD, ADD_ASSIGN)
 		CASE2('*', '=', MUL, MUL_ASSIGN)
