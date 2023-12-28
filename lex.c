@@ -6,151 +6,13 @@
 #include <ctype.h>
 #include <assert.h>
 
+#include "token.h"
+
 #define BUFSZ 512
 
 int hold = 0;
 int holdc = 0;
 int fd = 0;
-
-typedef enum {
-	UNDEFINED = 0,
-
-	EOI, // End-Of-Input
-	IMMEDIATE,
-	IDENTIFIER,
-	NEWLINE,
-	SEMICOLON,
-	SPC,
-	COLON,
-	COMMA,
-	DOT,
-	LPAREN,
-	RPAREN,
-	LBRACKETS,
-	RBRACKETS,
-	LBRACES,
-	RBRACES,
-
-// OPERATORS
-	MUL,
-	DIV,
-	MOD,
-	ADD,
-	SUB,
-	LSHIFT,
-	RSHIFT,
-	LT,
-	GT,
-	LE,
-	GE,
-	EQUAL,
-	NEQUAL,
-	BAND,
-	BXOR,
-	BOR,
-	LAND,
-	LOR,
-	BNOT,
-	LNOT,
-	ASSIGN,
-	BAND_ASSIGN,
-	BOR_ASSIGN,
-	BXOR_ASSIGN,
-	BNOT_ASSIGN,
-	LAND_ASSIGN,
-	LOR_ASSIGN,
-	LSHIFT_ASSIGN,
-	RSHIFT_ASSIGN,
-	ADD_ASSIGN,
-	SUB_ASSIGN,
-	MUL_ASSIGN,
-	DIV_ASSIGN,
-	MOD_ASSIGN,
-	AT,
-
-	NTOK, // must be the last of "regular tokens"
-
-	FOR,
-	IF,
-	STRUCT,
-	SIZEOF,
-	RETURN,
-	NKEYWORDS, // must be the last "keyword"
-} ETok;
-
-typedef struct {
-	ETok type;
-} Tok;
-
-char *keywords[] = {
-	[FOR]    = "for",
-	[IF]     = "if",
-	[STRUCT] = "struct",
-	[SIZEOF] = "sizeof",
-	[RETURN] = "return",
-};
-
-char *tokenstrs[] = {
-	[EOI]        = "EOI",
-	[FOR]        = "FOR",
-	[IF]         = "IF",
-	[STRUCT]     = "STRUCT",
-	[SIZEOF]     = "SIZEOF",
-	[RETURN]     = "RETURN",
-
-	[IMMEDIATE]	 = "IMMEDIATE",
-	[IDENTIFIER] = "IDENTIFIER",
-	[NEWLINE]    = "NEWLINE",
-	[SEMICOLON]  = "SEMICOLON",
-	[SPC]        = "SPC",
-	[COLON]      = "COLON",
-	[COMMA]      = "COMMA",
-	[DOT]		 = "DOT",
-	[LPAREN]     = "LPAREN",
-	[RPAREN]     = "RPAREN",
-	[LBRACKETS]  = "LBRACKETS",
-	[RBRACKETS]  = "RBRACKETS",
-	[LBRACES]    = "LBRACES",
-	[RBRACES]    = "RBRACES",
-
-	[MUL] = "MUL",
-	[DIV] = "DIV",
-	[MOD] = "MOD",
-	[ADD] = "ADD",
-	[SUB] = "SUB",
-	[LSHIFT] = "LSHIFT",
-	[RSHIFT] = "RSHIFT",
-	[LT] = "LT",
-	[GT] = "GT",
-	[LE] = "LE",
-	[GE] = "GE",
-	[EQUAL] = "EQUAL",
-	[NEQUAL] = "NEQUAL",
-	[BAND] = "BAND",
-	[BXOR] = "BXOR",
-	[BOR] = "BOR",
-	[LAND] = "LAND",
-	[LOR] = "LOR",
-	[BNOT] = "BNOT",
-	[LNOT] = "LNOT",
-	[ASSIGN] = "ASSIGN",
-	[BAND_ASSIGN] = "BAND_ASSIGN",
-	[BOR_ASSIGN] = "BOR_ASSIGN",
-	[BXOR_ASSIGN] = "BXOR_ASSIGN",
-	[BNOT_ASSIGN] = "BNOT_ASSIGN",
-	[LAND_ASSIGN] = "LAND_ASSIGN",
-	[LOR_ASSIGN] = "LOR_ASSIGN",
-	[LSHIFT_ASSIGN] = "LSHIFT_ASSIGN",
-	[RSHIFT_ASSIGN] = "RSHIFT_ASSIGN",
-	[ADD_ASSIGN] = "ADD_ASSIGN",
-	[SUB_ASSIGN] = "SUB_ASSIGN",
-	[MUL_ASSIGN] = "MUL_ASSIGN",
-	[DIV_ASSIGN] = "DIV_ASSIGN",
-	[MOD_ASSIGN] = "MOD_ASSIGN",
-	[AT] = "AT",
-
-	[UNDEFINED]  = "UNDEFINED",
-};
 
 #ifdef DEBUG
 int identsz = 0;
@@ -288,7 +150,7 @@ peek_dec(int sign, char c)
 }
 
 void
-peek_bin()
+peek_bin(void)
 {
 	int64_t val = 0;
 	char c = peekc();
@@ -307,7 +169,7 @@ peek_bin()
 }
 
 void
-peek_hex()
+peek_hex(void)
 {
 	int64_t val = 0;
 	char c = peekc();
@@ -337,7 +199,6 @@ peek_hex()
 
 void
 peek_immediate(char c)
-// => called only if peek() is in [0..9]
 {
 	// Can be hex bin or dec
 	if (c == '0') {
@@ -376,7 +237,7 @@ peek_identifier(char *buf, char c)
 }
 
 Tok
-peek()
+peek(void)
 {
 	static Tok tok;
 	char buf[64];
@@ -596,6 +457,8 @@ getnext(void)
 int
 main(int argc, char *argv[])
 {
+	(void) argc;
+	(void) argv;
 	Tok t;
 	do {
 		t = getnext();

@@ -4,9 +4,10 @@
 CFLAGS = -g3 -Og -Wall -Wextra -pedantic
 OFLAGS =
 
-all: lex
+all: lex parser
 
 lex: lex.o
+parser: parser.o
 
 .o:
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
