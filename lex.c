@@ -5,29 +5,55 @@
 #include <stdint.h>
 #include <ctype.h>
 #include <assert.h>
+#include <inttypes.h>
 
-#include "token.h"
+#include <fatarena.h>
+#include <token.h>
 
 #define BUFSZ 512
+#define OK(_v) do {assert(_v);} while(0)
+#define POK(_v, _msg) if (!(_v)) {perror(_msg); exit(1);}
+#define PGW(_gw) printf("{ addr: %p, remain: %zu, size: %zu}\n", _gw.addr, _gw.remain, _gw.size)
+
 
 int hold = 0;
 int holdc = 0;
 int fd = 0;
 
-#ifdef DEBUG
-int identsz = 0;
-char* IDENTIFIER_STACK[1024] = {0};
-int immedsz = 0;
-int64_t IMMEDIATE_STACK[1024] = {0};
-#endif // DEBUG
+FatArena ftident = {0};
+FatArena ftimmed = {0};
 
-char*
-strdup(const char *s)
+int
+strsave(const char *s)
 {
-	int len = strlen(s);
-	char *d = calloc(len, sizeof(char));
-	strcpy(d, s);
-	return d;
+	int len = strlen(s) + 1;
+	int idx = ftalloc(&ftident, len);
+	OK(idx >= 0 && "fail to allocate char*");
+	OK(ftwrite(&ftident, idx, (const uint8_t*) s, len) != 0 && "fail to write");
+	return idx;
+}
+
+int
+intsave(int64_t v)
+{
+	int64_t* d;
+	int idx = ftalloc(&ftimmed, sizeof(int64_t));
+	OK(idx >= 0 && "fail to allocate int64_t");
+	OK(((d = (int64_t*) ftptr(&ftimmed, idx)) != NULL));
+	*d = v;
+	return idx;
+}
+
+int
+floatsave(double v)
+{
+	double* d;
+	int idx = ftalloc(&ftimmed, sizeof(double));
+	OK(idx >= 0 && "fail to allocate double");
+	OK(((d = (double*) ftptr(&ftimmed, idx)) != NULL));
+	*d = v;
+
+	return idx;
 }
 
 void
@@ -82,32 +108,29 @@ peekc(void)
 void
 printtok(FILE *o, Tok t)
 {
-	fprintf(o, "%s(%d)\n", tokenstrs[t.type], t.type);
-}
-
-#ifdef DEBUG
-void
-printident(FILE *o)
-{
-	fprintf(o, "IDENTIFIER_STACK:\n");
-	for (int i = 0; i < identsz; i++) {
-		fprintf(o, "%s\n", IDENTIFIER_STACK[i]);
+	static int prv = -1;
+	if (t.type <= NKEYWORDS) {
+		fprintf(o, "%s(%d)\n", tokenstrs[t.type], t.type);
+	} else {
+		switch (prv) {
+		case IDENTIFIER:
+			fprintf(o, "<%s>\n", (char*) ftptr(&ftident, t.type));
+			break;
+		case INT:
+			fprintf(o, "<%" PRId64 ">\n", (int64_t) * ((int64_t*) ftptr(&ftimmed, t.type)));
+			break;
+		case FLOAT:
+			fprintf(o, "<%f>\n", (double ) * ((double*) ftptr(&ftimmed, t.type)));
+			break;
+		default:
+			assert(1 && "Unreachable, wrong type.");
+		}
 	}
+	prv = t.type;
 }
 
-void
-printimmed(FILE *o)
-{
-	fprintf(o, "IMMEDIATE_STACK:\n");
-	for (int i = 0; i < immedsz; i++) {
-		fprintf(o, "%ld\n", IMMEDIATE_STACK[i]);
-	}
-}
-#endif // DEBUG
-
-// TODO(all): find a way to save the IMMEDIATE.
-void
-peek_float(int64_t n)
+ETok
+peek_float(int *d, int sign, int64_t n)
 {
 	(void) n;
 	int64_t val = 0;
@@ -119,13 +142,21 @@ peek_float(int64_t n)
 		val += ic;
 		c = peekc();
 	}
-#ifdef DEBUG
-	IMMEDIATE_STACK[immedsz++] = n;
-#endif
+
+	double dval = (double) val;
+	while (dval > 1.0) {
+		dval *= 0.1;
+	}
+
+	dval += (double) n;
+	dval *= sign;
+
+	OK((*d = floatsave(dval)) >= 0);
+	return FLOAT;
 }
 
-void
-peek_dec(int sign, char c)
+ETok
+peek_dec(int *d, int sign, char c)
 {
 	int64_t val = c - '0';
 	c = peekc();
@@ -136,21 +167,19 @@ peek_dec(int sign, char c)
 		val += ic;
 		c = peekc();
 	}
-	val *= sign;
 
 	if (c == '.') {
 		forward();
-		peek_float(val);
-		return;
+		return peek_float(d, sign, val);
 	}
 
-#ifdef DEBUG
-	IMMEDIATE_STACK[immedsz++] = val;
-#endif // DEBUG
+	val *= sign;
+	OK((*d = intsave(val)) >= 0);
+	return INT;
 }
 
-void
-peek_bin(void)
+ETok
+peek_bin(int *d)
 {
 	int64_t val = 0;
 	char c = peekc();
@@ -163,13 +192,12 @@ peek_bin(void)
 		c = peekc();
 	}
 
-#ifdef DEBUG
-	IMMEDIATE_STACK[immedsz++] = val;
-#endif // DEBUG
+	OK((*d = intsave(val)) >= 0);
+	return INT;
 }
 
-void
-peek_hex(void)
+ETok
+peek_hex(int *d)
 {
 	int64_t val = 0;
 	char c = peekc();
@@ -192,13 +220,12 @@ peek_hex(void)
 		val += ic;
 	}
 
-#ifdef DEBUG
-	IMMEDIATE_STACK[immedsz++] = val;
-#endif // DEBUG
+	OK((*d = intsave(val)) >= 0);
+	return INT;
 }
 
-void
-peek_immediate(char c)
+ETok
+peek_immediate(int *d, char c)
 {
 	// Can be hex bin or dec
 	if (c == '0') {
@@ -206,18 +233,16 @@ peek_immediate(char c)
 
 		if (c == 'X' || c == 'x') {
 			forward();
-			peek_hex();
-			return;
+			return peek_hex(d);
 		}
 
 		if (c == 'B' || c == 'b') {
 			forward();
-			peek_bin();
-			return;
+			return peek_bin(d);
 		}
 	}
 
-	peek_dec(1, c);
+	return peek_dec(d, 1, c);
 }
 
 void
@@ -240,6 +265,14 @@ Tok
 peek(void)
 {
 	static Tok tok;
+	static int idx = 0;
+	// in case of INT, FLOAT, IDENTIFIER:
+	if (idx != 0) {
+		Tok t = {idx};
+		idx = 0;
+		return t;
+	}
+
 	char buf[64];
 	char c;
 
@@ -295,8 +328,7 @@ peek(void)
 	case '.':
 		c = peekc();
 		if (c >= '0' && c <= '9') {
-			peek_float(0);
-			tok.type = IMMEDIATE;
+			tok.type = peek_float(&idx, 1, 0);
 		} else {
 			tok.type = DOT;
 		}
@@ -363,8 +395,7 @@ peek(void)
 			tok.type = SUB_ASSIGN;
 		} else if (c >= '0' && c <= '9') {
 			forward();
-			peek_dec(-1, c);
-			tok.type = IMMEDIATE;
+			tok.type = peek_dec(&idx, -1, c);
 		} else {
 			tok.type = SUB;
 		}
@@ -414,8 +445,7 @@ peek(void)
 	default:
 		// IMMEDIATE
 		if (c >= '0' && c <= '9') {
-			peek_immediate(c);
-			tok.type = IMMEDIATE;
+			tok.type = peek_immediate(&idx, c);
 		} else {
 			peek_identifier(buf, c);
 			int i;
@@ -428,10 +458,7 @@ peek(void)
 			}
 			if (i == NKEYWORDS) {
 				tok.type = IDENTIFIER;
-#ifdef DEBUG
-				IDENTIFIER_STACK[identsz++] = strdup(buf);
-#endif // DEBUG
-				// TODO(ghuter): save the buffer somewhere, link it to the token
+				idx = strsave(buf);
 			}
 		}
 		break;
@@ -459,14 +486,17 @@ main(int argc, char *argv[])
 {
 	(void) argc;
 	(void) argv;
+
+	POK(ftnew(&ftident, 1000000) != 0, "fail to create a FatArena");
+	ftalloc(&ftident, NKEYWORDS + 1);// burn significant int
+
+	POK(ftnew(&ftimmed, 1000000) != 0, "fail to create a FatArena");
+	ftalloc(&ftimmed, NKEYWORDS + 1);// burn significant int
+
 	Tok t;
 	do {
 		t = getnext();
 		printtok(stdout, t);
 	} while (t.type != EOI);
-#ifdef DEBUG
-	printident(stdout);
-	printimmed(stdout);
-#endif // DEBUG
 }
 

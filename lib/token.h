@@ -2,7 +2,8 @@ typedef enum {
 	UNDEFINED = 0,
 
 	EOI, // End-Of-Input
-	IMMEDIATE,
+	INT,
+	FLOAT,
 	IDENTIFIER,
 	NEWLINE,
 	SEMICOLON,
@@ -99,7 +100,8 @@ char *tokenstrs[] = {
 	[IMPORT]        = "IMPORT",
 	[ENUM]		    = "ENUM",
 
-	[IMMEDIATE]	    = "IMMEDIATE",
+	[INT]			= "INT",
+	[FLOAT]			= "FLOAT",
 	[IDENTIFIER]    = "IDENTIFIER",
 	[NEWLINE]       = "NEWLINE",
 	[SEMICOLON]     = "SEMICOLON",
