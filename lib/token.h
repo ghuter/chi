@@ -4,6 +4,7 @@ typedef enum {
 	EOI, // End-Of-Input
 	INT,
 	FLOAT,
+	LITERAL,
 	IDENTIFIER,
 	NEWLINE,
 	SEMICOLON,
@@ -102,6 +103,7 @@ char *tokenstrs[] = {
 
 	[INT]			= "INT",
 	[FLOAT]			= "FLOAT",
+	[LITERAL]		= "LITERAL",
 	[IDENTIFIER]    = "IDENTIFIER",
 	[NEWLINE]       = "NEWLINE",
 	[SEMICOLON]     = "SEMICOLON",

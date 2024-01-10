@@ -21,6 +21,7 @@ int holdc = 0;
 int fd = 0;
 
 FatArena ftident = {0};
+FatArena ftlit = {0};
 FatArena ftimmed = {0};
 
 int
@@ -116,6 +117,9 @@ printtok(FILE *o, Tok t)
 		case IDENTIFIER:
 			fprintf(o, "<%s>\n", (char*) ftptr(&ftident, t.type));
 			break;
+		case LITERAL:
+			fprintf(o, "\"%s\"\n", (char*) ftptr(&ftlit, t.type));
+			break;
 		case INT:
 			fprintf(o, "<%" PRId64 ">\n", (int64_t) * ((int64_t*) ftptr(&ftimmed, t.type)));
 			break;
@@ -123,7 +127,7 @@ printtok(FILE *o, Tok t)
 			fprintf(o, "<%f>\n", (double ) * ((double*) ftptr(&ftimmed, t.type)));
 			break;
 		default:
-			assert(1 && "Unreachable, wrong type.");
+			assert(0 && "Unreachable, wrong type.");
 		}
 	}
 	prv = t.type;
@@ -245,6 +249,27 @@ peek_immediate(int *d, char c)
 	return peek_dec(d, 1, c);
 }
 
+ETok
+peek_literal(int *d)
+{
+	int start = ftalloc(&ftlit, sizeof(char));
+	*d = start;
+	uint8_t *addr = ftptr(&ftlit, start);
+
+	char c = peekc();
+	forward();
+	while (c != '"') {
+		OK(ftalloc(&ftlit, sizeof(char)) > 0);
+		*addr = c;
+		addr++;
+		c = peekc();
+		forward();
+	}
+
+	*addr = '\0';
+	return LITERAL;
+}
+
 void
 peek_identifier(char *buf, char c)
 {
@@ -324,6 +349,9 @@ peek(void)
 		break;
 	case '}':
 		tok.type = RBRACES;
+		break;
+	case '"':
+		tok.type = peek_literal(&idx);
 		break;
 	case '.':
 		c = peekc();
@@ -492,6 +520,9 @@ main(int argc, char *argv[])
 
 	POK(ftnew(&ftimmed, 1000000) != 0, "fail to create a FatArena");
 	ftalloc(&ftimmed, NKEYWORDS + 1);// burn significant int
+
+	POK(ftnew(&ftlit, 1000000) != 0, "fail to create a FatArena");
+	ftalloc(&ftlit, NKEYWORDS + 1);// burn significant int
 
 	Tok t;
 	do {
