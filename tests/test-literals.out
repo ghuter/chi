@@ -1,0 +1,9 @@
+LITERAL(4)
+"Hello"
+NEWLINE(6)
+LITERAL(4)
+"123"
+NEWLINE(6)
+LITERAL(4)
+",;+-0[]{}()"
+EOI(1)
