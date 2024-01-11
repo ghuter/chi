@@ -7,12 +7,12 @@
 #include <assert.h>
 #include <inttypes.h>
 
-#include <fatarena.h>
-#include <token.h>
+#include "fatarena.h"
+#include "token.h"
+#include "lex.h"
 
 #define BUFSZ 512
 #define OK(_v) do {assert(_v);} while(0)
-#define POK(_v, _msg) if (!(_v)) {perror(_msg); exit(1);}
 #define PGW(_gw) printf("{ addr: %p, remain: %zu, size: %zu}\n", _gw.addr, _gw.remain, _gw.size)
 
 
@@ -24,7 +24,7 @@ FatArena ftident = {0};
 FatArena ftlit = {0};
 FatArena ftimmed = {0};
 
-int
+static int
 strsave(const char *s)
 {
 	int len = strlen(s) + 1;
@@ -34,7 +34,7 @@ strsave(const char *s)
 	return idx;
 }
 
-int
+static int
 intsave(int64_t v)
 {
 	int64_t* d;
@@ -45,7 +45,7 @@ intsave(int64_t v)
 	return idx;
 }
 
-int
+static int
 floatsave(double v)
 {
 	double* d;
@@ -57,13 +57,13 @@ floatsave(double v)
 	return idx;
 }
 
-void
+static void
 forward(void)
 {
 	holdc = 0;
 }
 
-char
+static char
 peekc(void)
 {
 	static char buf[BUFSZ];
@@ -133,7 +133,7 @@ printtok(FILE *o, Tok t)
 	prv = t.type;
 }
 
-ETok
+static ETok
 peek_float(int *d, int sign, int64_t n)
 {
 	(void) n;
@@ -159,7 +159,7 @@ peek_float(int *d, int sign, int64_t n)
 	return FLOAT;
 }
 
-ETok
+static ETok
 peek_dec(int *d, int sign, char c)
 {
 	int64_t val = c - '0';
@@ -182,7 +182,7 @@ peek_dec(int *d, int sign, char c)
 	return INT;
 }
 
-ETok
+static ETok
 peek_bin(int *d)
 {
 	int64_t val = 0;
@@ -200,7 +200,7 @@ peek_bin(int *d)
 	return INT;
 }
 
-ETok
+static ETok
 peek_hex(int *d)
 {
 	int64_t val = 0;
@@ -228,7 +228,7 @@ peek_hex(int *d)
 	return INT;
 }
 
-ETok
+static ETok
 peek_immediate(int *d, char c)
 {
 	// Can be hex bin or dec
@@ -249,7 +249,7 @@ peek_immediate(int *d, char c)
 	return peek_dec(d, 1, c);
 }
 
-ETok
+static ETok
 peek_literal(int *d)
 {
 	int start = ftalloc(&ftlit, sizeof(char));
@@ -270,7 +270,7 @@ peek_literal(int *d)
 	return LITERAL;
 }
 
-void
+static void
 peek_identifier(char *buf, char c)
 {
 	int len = 0;
@@ -286,7 +286,7 @@ peek_identifier(char *buf, char c)
 	buf[len++] = 0;
 }
 
-Tok
+static Tok
 peek(void)
 {
 	static Tok tok;
@@ -494,7 +494,7 @@ peek(void)
 	return tok;
 }
 
-void
+static void
 tok_forward(void)
 {
 	hold = 0;
@@ -507,27 +507,5 @@ getnext(void)
 	Tok t = peek();
 	tok_forward();
 	return t;
-}
-
-int
-main(int argc, char *argv[])
-{
-	(void) argc;
-	(void) argv;
-
-	POK(ftnew(&ftident, 1000000) != 0, "fail to create a FatArena");
-	ftalloc(&ftident, NKEYWORDS + 1);// burn significant int
-
-	POK(ftnew(&ftimmed, 1000000) != 0, "fail to create a FatArena");
-	ftalloc(&ftimmed, NKEYWORDS + 1);// burn significant int
-
-	POK(ftnew(&ftlit, 1000000) != 0, "fail to create a FatArena");
-	ftalloc(&ftlit, NKEYWORDS + 1);// burn significant int
-
-	Tok t;
-	do {
-		t = getnext();
-		printtok(stdout, t);
-	} while (t.type != EOI);
 }
 
