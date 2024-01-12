@@ -1,3 +1,4 @@
+#include <assert.h>
 #include "lib/token.h"
 
 #define STRINGIFY(x) #x
@@ -11,6 +12,7 @@
 static int line = 0;
 static int eoi = 0;
 FatArena fttok = {0};
+FatArena ftast = {0};
 
 #define BURNSEPARATORS(_t, _i)                 \
 	do {                                       \
@@ -42,11 +44,13 @@ do {                                           \
 
 #define ISMONADICOP(_op) (_op == SUB || _op == LNOT || _op == BNOT || _op == BXOR || _op == AT || _op == SIZEOF)
 #define ISBINOP(_op) (_op >= MUL && _op <= LNOT)
+#define TOKTOOP(_t) ((_t) - MUL)
 
 
 int
 parse_toplevel_fun(ETok *t)
 {
+	(void)t;
 	TODO("Toplevel fun");
 	return 0;
 }
@@ -54,6 +58,7 @@ parse_toplevel_fun(ETok *t)
 int
 parse_toplevel_interface(ETok *t)
 {
+	(void)t;
 	TODO("Toplevel interface");
 	return 0;
 }
@@ -122,30 +127,195 @@ parse_toplevel_struct(ETok *t)
 int
 parse_toplevel_enum(ETok *t)
 {
+	(void)t;
 	TODO("Toplevel enum");
 	return 0;
 }
 
+typedef int intptr;
 typedef enum {
 	ENONE,
-	ECST,
+	ECSTI,
+	ECSTF,
+	ECSTS,
 	EMEM,
 	EBINOP,
 	EUNOP,
 	ECALL,
 	ERETURN,
 	NEXPR,
-} Expr;
+} EExpr;
 
-char *exprstr[NEXPR] = {
+char *exprstrs[NEXPR] = {
 	[ENONE]   = "ENONE",
-	[ECST]    = "ECST",
+	[ECSTI]   = "ECSTI",
+	[ECSTF]   = "ECSTF",
+	[ECSTS]   = "ECSTS",
 	[EMEM]    = "EMEM",
 	[EBINOP]  = "EBINOP",
 	[EUNOP]   = "EUNOP",
 	[ECALL]   = "ECALL",
 	[ERETURN] = "ERETURN",
 };
+
+typedef enum {
+	OP_MUL,
+	OP_DIV,
+	OP_MOD,
+	OP_ADD,
+	OP_SUB,
+	OP_LSHIFT,
+	OP_RSHIFT,
+	OP_LT,
+	OP_GT,
+	OP_LE,
+	OP_GE,
+	OP_EQUAL,
+	OP_NEQUAL,
+	OP_BAND,
+	OP_BXOR,
+	OP_BOR,
+	OP_LAND,
+	OP_LOR,
+	OP_BNOT,
+	OP_LNOT,
+	OP_NUM,
+} Op;
+
+const char *opstrs[OP_NUM] = {
+	[OP_MUL]    = "MUL",
+	[OP_DIV]    = "DIV",
+	[OP_MOD]    = "MOD", 
+	[OP_ADD]    = "ADD",
+	[OP_SUB]    = "SUB",
+	[OP_LSHIFT] = "LSHIFT",
+	[OP_RSHIFT] = "RSHIFT",
+	[OP_LT]     = "LT",
+	[OP_GT]     = "GT",
+	[OP_LE]     = "LE",
+	[OP_GE]     = "GE",
+	[OP_EQUAL]  = "EQUAL",
+	[OP_NEQUAL] = "NEQUAL",
+	[OP_BAND]   = "BAND",
+	[OP_BXOR]   = "BXOR",
+	[OP_BOR]    = "BOR",
+	[OP_LAND]   = "LAND",
+	[OP_LOR]    = "LOR",
+	[OP_BNOT]   = "BNOT",
+	[OP_LNOT]   = "LNOT",
+};
+
+typedef enum {
+		UOP_SUB,
+		UOP_LNOT,
+		UOP_BNOT,
+		UOP_BXOR,
+		UOP_AT,
+		UOP_SIZEOF,
+		UOP_NUM,
+} Uop;
+
+const char *uopstrs[UOP_NUM] = {
+		[UOP_SUB]    = "SUB",
+		[UOP_LNOT]   = "LNOT",
+		[UOP_BNOT]   = "BNOT",
+		[UOP_BXOR]   = "BXOR",
+		[UOP_AT]     = "AT",
+		[UOP_SIZEOF] = "SIZEOF",
+};
+
+typedef EExpr UnknownExpr;
+
+typedef struct {
+	EExpr type;
+	intptr addr;
+} Csti;
+
+typedef Csti Cstf;
+typedef Csti Csts;
+typedef Csti Mem;
+
+typedef struct {
+	EExpr type;
+	Op op;
+	intptr left;
+	intptr right;
+} Binop;
+
+typedef struct {
+	EExpr type;
+	Uop op;
+	intptr expr;
+} Unop;
+
+typedef struct {
+	EExpr type;
+	int nparam;
+	intptr params;
+} Call;
+
+typedef struct {
+	EExpr type;
+	intptr expr;
+} Return;
+
+void
+printexpr(FILE* fd, intptr expr)
+{
+	UnknownExpr* ptr = (UnknownExpr*) ftptr(&ftast, expr);
+	switch(*ptr) {
+	case ENONE:
+		fprintf(fd, "<NONE>\n");
+		return;
+		break;
+	case ECSTI: {
+		Csti *csti = (Csti*) ptr;
+		fprintf(fd, "%s(%ld)", exprstrs[*ptr], *((int64_t*) ftptr(&ftimmed, csti->addr)));
+		return;
+		break;
+	}
+	case ECSTF: {
+		Cstf *cstf = (Cstf*) ptr;
+		fprintf(fd, "%s(%f)>", exprstrs[*ptr], *((double*) ftptr(&ftimmed, cstf->addr)));
+		return;
+		break;
+	}
+	case ECSTS: {
+		Csts *csts = (Csts*) ptr;
+		fprintf(fd, "%s(%s)", exprstrs[*ptr], (char*) ftptr(&ftlit, csts->addr));
+		return;
+		break;
+	}
+	case EMEM: {
+		Mem *mem = (Mem*) ptr;
+		fprintf(fd, "%s(%s)", exprstrs[*ptr], (char*) ftptr(&ftident, mem->addr));
+		return;
+		break;
+	}
+	case EBINOP: {
+		 Binop *binop = (Binop*) ptr;
+		 fprintf(fd, "%s(%s, ", exprstrs[*ptr], opstrs[binop->op]);
+		 printexpr(fd, binop->left);
+		 fprintf(fd, ", ");
+		 printexpr(fd, binop->right);
+		 fprintf(fd, ")");
+		 return;
+		 break;
+	 }
+	case EUNOP: {
+		 Unop *unop = (Unop*) ptr;
+		 fprintf(fd, "%s(%s, ", exprstrs[*ptr], uopstrs[unop->op]);
+		 printexpr(fd, unop->expr);
+		 fprintf(fd, ")");
+		 return;
+		 break;
+	}
+	case ECALL:
+	case ERETURN:
+	default:
+		assert(1 || "Unreachable enum");
+	}
+}
 
 int
 parse_call(ETok *t)
@@ -163,47 +333,76 @@ parse_call(ETok *t)
 }
 
 int
-parse_expression(ETok *t, const ETok *eoe)
+parse_expression(ETok *t, const ETok *eoe, intptr *d)
 {
 	TODO("Expression");
 	fprintf(stderr, "INFO: t == %p\n", (void*)t);
 
 	int i = 0;
-	int ident = -1;
-	int op = -1;
-	Expr expr = ENONE;
+	int addr = -1;
+	int add = 0;
+	EExpr type = ENONE;
 
 	switch (t[i]) {
 		case IDENTIFIER:
+			type = EMEM;
 			i++;
-			ident = t[i];
-			expr = EMEM;
+			addr = t[i];
 			i++;
 			if (parse_call(t + i) != 0) {
-				expr = ECALL;
+				type = ECALL;
 			}
 			break;
 
 		// Cst
+		case LITERAL: 
+			add++;
+			//fallthrough
 		case FLOAT:
-		case INT:
-		case LITERAL:
+			add++;
+			// fallthrough
+		case INT: 
+			type = ECSTI + add;
 			i++;
+			addr = t[i];
 			i++;
-			expr = ECST;
 			break;
 
 		// Unop
-		case SUB:    // fallthrough
-		case LNOT:   // fallthrough
-		case BNOT:   // fallthrough
-		case BXOR:   // fallthrough
-		case AT:     // fallthrough
-		case SIZEOF: 
+		case SIZEOF:
+			add++;
+			// fallthrough
+		case AT:
+			add++;
+			// fallthrough
+		case BXOR:
+			add++;
+			// fallthrough
+		case BNOT:
+			add++;
+			// fallthrough
+		case LNOT:
+			add++;
+			// fallthrough
+		case SUB: {
+			puts("UNOP");
+			intptr uaddr = ftalloc(&ftast, sizeof(Unop));
+			// Save unop
+			Unop *unop = (Unop*) ftptr(&ftast, uaddr);
+			unop->type = EUNOP;
+			unop->op = add;
+
+			// Parse the following expression
+			intptr expr = 0;
 			i++;
-			expr = EUNOP;
-			i += parse_expression(t + i, eoe);
+			i += parse_expression(t + i, eoe, &expr);
+			unop->expr = expr;
+
+			// Save destination
+			*d = uaddr;
+			return i;
 			break;
+				  }
 		default:
 			fprintf(stderr, "ERR: line %d, unexpected token <%s>\n", line, tokenstrs[t[i]]);
 			return 0;
@@ -215,16 +414,47 @@ parse_expression(ETok *t, const ETok *eoe)
 
 	ISEOE(t[i], eoe, res);
 	if (res != 0) {
-		fprintf(stderr, "INFO: line %d, expression <%s>\n", line, exprstr[expr]);
+		fprintf(stderr, "INFO: line %d, expression <%s>\n", line, exprstrs[type]);
+		// Alloc Identifier / Const
+		intptr maddr = ftalloc(&ftast, sizeof(Mem));
+		Mem* mem = (Mem*) ftptr(&ftast, maddr);
+
+		// Set Memory
+		mem->type = type;
+		mem->addr = addr;
+
+		// Set destination
+		*d = maddr;
 		return i;
 	}
 
 	if (ISBINOP(t[i])) {
-		op = t[i];
+		// Alloc a binop
+		intptr baddr = ftalloc(&ftast, sizeof(Binop));
+		Binop *binop = (Binop*) ftptr(&ftast, baddr);
+		binop->type = EBINOP;
+		binop->op = TOKTOOP(t[i]);
+
+		// Save in the return variable
+		*d = baddr;
+		
+		// Save the parsed expression
+		intptr laddr = ftalloc(&ftast, sizeof(Csti));
+		Csti *ptr = (Csti*) ftptr(&ftast, laddr);
+		ptr->type = type;
+		ptr->addr = addr;
+		binop->left = laddr;
+
+		// Parse the following expression
 		i++;
-		fprintf(stderr, "INFO: line %d, expression <%s> followed by a binop\n", line, exprstr[expr]);
-		fprintf(stderr, "---------------BINOP(%s, %s\n", tokenstrs[op], exprstr[expr]);
-		parse_expression(t + i, eoe);
+		intptr raddr = -1;
+		fprintf(stderr, "INFO: line %d, expression <%s> followed by a binop\n", line, exprstrs[binop->type]);
+		fprintf(stderr, "---------------BINOP(%s, %s\n", opstrs[binop->op], exprstrs[binop->type]);
+		i += parse_expression(t + i, eoe, &raddr);
+
+		// Save the following expression
+		binop->right = raddr;
+
 		fprintf(stderr,"---------------)\n");
 		return i;
 	}
@@ -243,7 +473,7 @@ parse_toplevel_decl(ETok *t)
 	int cst = -1;
 
 	if (t[i] != COLON) {
-		fprintf(stderr, "ERR: line %d, declaration: <IDENTIFIER> : <IDENTIFIER> : EXPR", line);
+		fprintf(stderr, "ERR: line %d, declaration: <IDENTIFIER> : <IDENTIFIER> : EXPR\n", line);
 		return 0;
 	}
 	i++;
@@ -279,7 +509,10 @@ parse_toplevel_decl(ETok *t)
 		parse_toplevel_interface(t + i);
 	} else /* Expression */ {
 		const ETok eoe[3] = {SEMICOLON, NEWLINE, UNDEFINED};
-		parse_expression(t + i, eoe);
+		intptr expr = 0;
+		parse_expression(t + i, eoe, &expr);
+		printexpr(stderr, expr);
+		fprintf(stderr, "\n");
 	}
 
 	// parse expression
@@ -303,6 +536,7 @@ parse_toplevel_decl(ETok *t)
 int
 parse_toplevel_import(ETok *t)
 {
+	(void)t;
 	TODO("IMPORT");
 	return 0;
 }

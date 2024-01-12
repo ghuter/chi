@@ -28,6 +28,8 @@ main(int argc, char *argv[])
 	POK(ftnew(&fttok, 1000000) != 0, "fail to create a FatArena");
 	int ntok = 0;
 
+	POK(ftnew(&ftast, 1000000) != 0, "fail to create a FatArena");
+
 	ETok *tlst = (ETok*) ftptr(&fttok, 0);
 	Tok t;
 	do {
