@@ -5,6 +5,11 @@
 #include "fatarena.h"
 #include "token.h"
 #include "lex.h"
+#include "parser.h"
+
+FatArena fttok = {0};
+FatArena ftast = {0};
+int line = 0;
 
 int
 main(int argc, char *argv[])
@@ -21,10 +26,21 @@ main(int argc, char *argv[])
 	POK(ftnew(&ftlit, 1000000) != 0, "fail to create a FatArena");
 	ftalloc(&ftlit, NKEYWORDS + 1);// burn significant int
 
-	Tok t = {0};
+	POK(ftnew(&fttok, 1000000) != 0, "fail to create a FatArena");
+	int ntok = 0;
+
+	POK(ftnew(&ftast, 1000000) != 0, "fail to create a FatArena");
+
+	ETok *tlst = (ETok*) ftptr(&fttok, 0);
+	Tok t;
 	do {
 		t = getnext();
-		printtok(stdout, t);
+		ftalloc(&fttok, sizeof(Tok));
+		if (t.type != SPC && t.type != NEWLINE) {
+			tlst[ntok++] = t.type;
+		}
 	} while (t.type != EOI);
+
+	parse_toplevel(tlst);
 }
 

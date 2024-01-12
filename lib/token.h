@@ -71,6 +71,7 @@ typedef enum {
 	IN,
 	IMPORT,
 	ENUM,
+	FUN,
 	NKEYWORDS, // must be the last "keyword"
 } ETok;
 
@@ -81,4 +82,4 @@ typedef struct {
 extern char *keywords[];
 extern char *tokenstrs[];
 
-#endif
+#endif /* TOKEN_H */
