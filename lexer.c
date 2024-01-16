@@ -22,9 +22,6 @@ main(int argc, char *argv[])
 	POK(ftnew(&ftlit, 1000000) != 0, "fail to create a FatArena");
 	ftalloc(&ftlit, NKEYWORDS + 1);// burn significant int
 
-	POK(ftnew(&ftlit, 1000000) != 0, "fail to create a FatArena");
-	ftalloc(&ftlit, NKEYWORDS + 1);// burn significant int
-
 	POK(ftnew(&fttok, 1000000) != 0, "fail to create a FatArena");
 	int ntok = 0;
 
@@ -35,7 +32,9 @@ main(int argc, char *argv[])
 	do {
 		t = getnext();
 		ftalloc(&fttok, sizeof(Tok));
-		if (t.type != SPC) tlst[ntok++] = t.type;
+		if (t.type != SPC) {
+			tlst[ntok++] = t.type;
+		}
 		printtok(stdout, t);
 	} while (t.type != EOI);
 
