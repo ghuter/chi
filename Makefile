@@ -14,13 +14,13 @@ analyzer: $(MAIN_ANALYZER_OBJ) main-analyzer.c
 analyzer.o: analyzer.c
 	$(CC) $(CFLAGS) -c analyzer.c -o analyzer.o
 
-MAIN_PARSER_OBJ = fatarena.o token.o map.o lex.o parser.o 
+MAIN_PARSER_OBJ = fatarena.o token.o map.o lex.o parser.o
 parser: $(MAIN_PARSER_OBJ) main-parser.c
 	$(CC) $(CFLAGS) $(LDFLAGS) main-parser.c -o parser $(MAIN_PARSER_OBJ)
 
 parser.o: parser.c
 	$(CC) $(CFLAGS) -c parser.c -o parser.o
-	
+
 LEXER_OBJS = map.o lexer.o lex.o fatarena.o token.o
 lexer: $(LEXER_OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(LEXER_OBJS)
