@@ -1,4 +1,5 @@
 lexer
+mapper
 *.o
 tests/*.res
 tests/*.err
