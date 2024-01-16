@@ -1,5 +1,6 @@
 lexer
 parser
+mapper
 *.o
 tests/*.res
 tests/*.err

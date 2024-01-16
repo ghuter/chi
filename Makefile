@@ -3,7 +3,7 @@
 
 CFLAGS = -g3 -Og -Wall -Wextra -pedantic -I./lib
 
-BIN = lexer parser
+BIN = lexer parser mapper
 
 all: $(BIN)
 
@@ -18,11 +18,18 @@ LEXER_OBJS = lexer.o lex.o fatarena.o token.o
 lexer: $(LEXER_OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(LEXER_OBJS)
 
+MAPPER_OBJS = mapper.o fatarena.o map.o
+mapper: $(MAPPER_OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(MAPPER_OBJS)
+
 token.o: lib/token.c
 	$(CC) $(CFLAGS) -c lib/token.c -o $@
 
 fatarena.o: lib/fatarena.c
 	$(CC) $(CFLAGS) -c lib/fatarena.c -o $@
+
+map.o: lib/map.c
+	$(CC) $(CFLAGS) -c lib/map.c -o $@
 
 .c.o:
 	$(CC) $(CFLAGS) -c $<
