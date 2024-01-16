@@ -1,6 +1,5 @@
 #include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <string.h>
 
 #include "fatarena.h"
@@ -26,8 +25,7 @@ streq(Str a, Str b)
 uint32_t*
 stri_upsert(Strimap **m, Str key, FatArena *perm)
 {
-	fprintf(stderr, "key: '%*s'\n", (int)key.len, key.data);
-	for (uint64_t h = hash64(key.data, key.len); *m; h <<= 2) {
+	for (uint64_t h = strhash(key); *m; h <<= 2) {
 		if (streq(key, (*m)->key)) {
 			return &(*m)->val;
 		}

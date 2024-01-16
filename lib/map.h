@@ -13,7 +13,7 @@ struct Strimap {
 	uint32_t val;
 };
 
-#define strhash(s) do { hash64(s.data, s.len); } while(0)
+#define strhash(s) (hash64((s).data, (s).len))
 
 uint64_t hash64(uint8_t *data, ptrdiff_t len);
 Bool streq(Str a, Str b);
