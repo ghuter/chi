@@ -94,6 +94,8 @@ char *exprstrs[NEXPR] = {
 	[EUNOP]   = "EUNOP",
 	[ECALL]   = "ECALL",
 	[EPAREN]  = "EPAREN",
+	[EACCESS] = "EACCESS",
+	[ESUBSCR] = "ESUBSCR",
 };
 
 const char *opstrs[OP_NUM] = {
@@ -131,6 +133,7 @@ void printexpr(FILE *fd, intptr expr);
 static int parse_expression(const ETok *t, const ETok *eoe, intptr *expr);
 static int parse_fun_stmts(const ETok *t, intptr *stmt);
 static int parse_call(const ETok *t, intptr ident, intptr *d);
+int parse_otherop(const ETok *t, const ETok *eoe, intptr *expr);
 
 void
 printstmt(FILE *fd, intptr stmt)
@@ -223,11 +226,11 @@ printstmt(FILE *fd, intptr stmt)
 	case SFOR: {
 		For *_for = (For*) ptr;
 		fprintf(fd, "%s(", stmtstrs[*ptr]);
-		printexpr(fd, _for->expr1);
+		printstmt(fd, _for->stmt1);
 		fprintf(fd, ", ");
-		printexpr(fd, _for->expr2);
+		printexpr(fd, _for->expr);
 		fprintf(fd, ", ");
-		printexpr(fd, _for->expr3);
+		printstmt(fd, _for->stmt2);
 		fprintf(fd, ", ");
 		printstmt(fd, _for->forstmt);
 		fprintf(fd, ")");
@@ -311,7 +314,8 @@ printexpr(FILE* fd, intptr expr)
 		Call *call = (Call*) ptr;
 		intptr *paramtab = (intptr*) ftptr(&ftast, call->params);
 
-		fprintf(fd, "%s(%s", exprstrs[*ptr], (char*) ftptr(&ftident, call->ident));
+		fprintf(fd, "%s(", exprstrs[*ptr]);
+		printexpr(fd, call->expr);
 		for (int i = 0; i < call->nparam; i++) {
 			fprintf(fd, ", ");
 			printexpr(fd, paramtab[i]);
@@ -327,6 +331,24 @@ printexpr(FILE* fd, intptr expr)
 		fprintf(fd, ")");
 		return;
 		break;
+	}
+	case EACCESS: {
+		Access *ac = (Access*) ptr;
+		fprintf(fd, "%s(", exprstrs[*ptr]);
+		printexpr(fd, ac->expr);
+		fprintf(fd, ".");
+		fprintf(fd, "%s", (char*) ftptr(&ftident, ac->ident));
+		fprintf(fd, ")");
+		return;
+		break;
+	}
+	case ESUBSCR: {
+		Subscr *sb = (Subscr*) ptr;
+		fprintf(fd, "%s(", exprstrs[*ptr]);
+		printexpr(fd, sb->expr);
+		fprintf(fd, "[");
+		printexpr(fd, sb->idxexpr);
+		fprintf(fd, "])");
 	}
 	default:
 		assert(1 || "Unreachable epxr");
@@ -396,6 +418,90 @@ parse_param(const ETok *t, Fun* fun)
 }
 
 static int
+parse_for_stmt(const ETok *t, intptr *stmt)
+{
+	const ETok eoe[] = {SEMICOLON, LBRACES, UNDEFINED};
+	int i = 0;
+	int res = -1;
+	int ident = -1;
+
+	if (t[i] != IDENTIFIER) {
+		ERR("Exepects a declaration / assign statement in a forloop header.");
+		return -1;
+	}
+	i++;
+	ident = t[i];
+	i++;
+
+	// case assign
+	if (t[i] >= ASSIGN && t[i] <= MOD_ASSIGN) {
+		i++;
+
+		intptr aaddr = ftalloc(&ftast, sizeof(Assign));
+		*stmt = aaddr;
+
+		Assign *assign = (Assign*) ftptr(&ftast, aaddr);
+		assign->type = SASSIGN;
+		assign->ident = ident;
+
+		res = parse_expression(t + i, eoe, &assign->expr);
+		if (res < 0) {
+			ERR("parse expression in a function.");
+			return -1;
+		}
+		i += res;
+
+		return i;
+	}
+
+	// case declaration
+	int cst = -1;
+	int itype = -1;
+
+	if (t[i] != COLON) {
+		ERR("Unexpected token <%s> at the beginning of a statement in a forloop.\n|> Expects `:`", tokenstrs[t[i]]);
+		return -1;
+	}
+	i++;
+
+	if (t[i] == IDENTIFIER) {
+		i++;
+		itype = t[i];
+		i++;
+	}
+
+	if (t[i] == COLON) {
+		i++;
+		cst = 1;
+	} else if (t[i] == ASSIGN) {
+		i++;
+		cst = 0;
+	} else {
+		ERR("Unexpected token <%s> in a declaration statement in a forloop.", tokenstrs[t[i]]);
+		return -1;
+	}
+
+	intptr daddr = ftalloc(&ftast, sizeof(Decl));
+	*stmt = daddr;
+
+	Decl *decl = (Decl*) ftptr(&ftast, daddr);
+	decl->type = SDECL;
+	decl->cst = cst;
+	decl->itype = itype;
+	decl->ident = ident;
+
+	res = parse_expression(t + i, eoe, &decl->expr);
+	if (res < 0) {
+		ERR("parsing expression in a declaration statement");
+		return -1;
+	}
+	i += res;
+
+	return i;
+
+}
+
+static int
 parse_fun_stmt(const ETok *t, intptr *stmt)
 {
 	const ETok eoe[] = {SEMICOLON, RBRACES, UNDEFINED};
@@ -445,10 +551,10 @@ parse_fun_stmt(const ETok *t, intptr *stmt)
 
 			return i;
 		}
-		
+
 		if (t[i] == LPAREN) {
 			intptr caddr = -1;
-			res = parse_call(t+i, ident, &caddr);
+			res = parse_call(t + i, ident, &caddr);
 			if (res < 0) {
 				ERR("Error when paring a call statement in a function.");
 				return -1;
@@ -560,28 +666,39 @@ parse_fun_stmt(const ETok *t, intptr *stmt)
 	}
 	case FOR: {
 		i++;
-		const ETok eoe1[] = {SEMICOLON, UNDEFINED};
-		const ETok eoe2[] = {LBRACES, UNDEFINED};
-		intptr expr1, expr2, expr3, forstmt;
-		res = parse_expression(t + i, eoe1, &expr1);
+		const ETok eoe[] = {SEMICOLON, UNDEFINED};
+		intptr stmt1, stmt2, expr, forstmt;
+		res = parse_for_stmt(t + i, &stmt1);
 		if (res < 0) {
-			ERR("Error when parsing the first expression of a forloop. Exepects: `for` `expr`; `expr` `;` `expr` `{` stmt `}`");
+			ERR("Error when parsing the first statement of a forloop. Exepects: `for` `stmt`; `expr` `;` `stmt` `{` stmt `}`");
 			return -1;
 		}
 		i += res;
+
+		// Consume `;`
+		if (t[i] != SEMICOLON) {
+			ERR("Error when parsing the expression of a forloop. Exepects: `for` `stmt`; `expr` `;` `stmt` `{` stmt `}`");
+			return -1;
+		}
 		i++;
 
-		res = parse_expression(t + i, eoe1, &expr2);
+		res = parse_expression(t + i, eoe, &expr);
 		if (res < 0) {
-			ERR("Error when parsing the second expression of a forloop. Exepects: `for` `expr`; `expr` `;` `expr` `{` stmt `}`");
+			ERR("Error when parsing the expression of a forloop. Exepects: `for` `stmt`; `expr` `;` `stmt` `{` stmt `}`");
 			return -1;
 		}
 		i += res;
+
+		// Consume `;`
+		if (t[i] != SEMICOLON) {
+			ERR("Error when parsing the expression of a forloop. Exepects: `for` `stmt`; `expr` `;` `stmt` `{` stmt `}`");
+			return -1;
+		}
 		i++;
 
-		res = parse_expression(t + i, eoe2, &expr3);
+		res = parse_for_stmt(t + i, &stmt2);
 		if (res < 0) {
-			ERR("Error when parsing the third expression of a forloop. Exepects: `for` `expr`; `expr` `;` `expr` `{` stmt `}`");
+			ERR("Error when parsing the second statement of a forloop. Exepects: `for` `stmt`; `expr` `;` `stmt` `{` stmt `}`");
 			return -1;
 		}
 		i += res;
@@ -596,14 +713,14 @@ parse_fun_stmt(const ETok *t, intptr *stmt)
 		i++;
 
 		intptr faddr = ftalloc(&ftast, sizeof(For));
-		*stmt=faddr;
+		*stmt = faddr;
 
 		For *_for = (For*) ftptr(&ftast, faddr);
 		_for->type = SFOR;
 		_for->forstmt = forstmt;
-		_for->expr1 = expr1;
-		_for->expr2 = expr2;
-		_for->expr3 = expr3;
+		_for->stmt1 = stmt1;
+		_for->stmt2 = stmt2;
+		_for->expr = expr;
 
 		return i;
 	}
@@ -638,7 +755,7 @@ parse_fun_stmts(const ETok *t, intptr *stmt)
 		}
 		i += res;
 
-		switch(t[i]) {
+		switch (t[i]) {
 		case SEMICOLON:
 			i++;
 			if (t[i] == RBRACES) {
@@ -657,7 +774,7 @@ parse_fun_stmts(const ETok *t, intptr *stmt)
 
 		case RBRACES:
 			// Case right after a block
-			if (t[i-1] == RBRACES) {
+			if (t[i - 1] == RBRACES) {
 				break;
 			}
 
@@ -667,7 +784,7 @@ parse_fun_stmts(const ETok *t, intptr *stmt)
 
 		default:
 			// Case right after a block
-			if (t[i-1] == RBRACES) {
+			if (t[i - 1] == RBRACES) {
 				intptr addr = ftalloc(&ftast, sizeof(Seq));
 				intptr cpy = *saveaddr;
 				*saveaddr = addr;
@@ -827,7 +944,7 @@ parse_toplevel_enum(const ETok *t)
 
 
 static int
-parse_call(const ETok *t, intptr ident, intptr *d)
+parse_call(const ETok *t, intptr addr, intptr *d)
 {
 	const ETok eoe[3] = {COMMA, RPAREN, UNDEFINED};
 	int i = 0;
@@ -872,7 +989,7 @@ parse_call(const ETok *t, intptr ident, intptr *d)
 	// Save the params
 	Call *call = (Call*) ftptr(&ftast, caddr);
 	call->type = ECALL;
-	call->ident = ident;
+	call->expr = addr;
 	call->nparam = nparam;
 	call->params = ftalloc(&ftast, nparam * sizeof(intptr));
 	intptr *cparams = (intptr*) ftptr(&ftast, call->params);
@@ -886,11 +1003,10 @@ err:
 }
 
 int
-parse_unop(const ETok *t, const ETok *eoe, intptr *expr)
+parse_direct(const ETok *t, intptr *expr)
 {
 	int i = 0;
 	int add = 0;
-	int ires = -1;
 
 	switch (t[i]) {
 	case IDENTIFIER: {
@@ -898,16 +1014,6 @@ parse_unop(const ETok *t, const ETok *eoe, intptr *expr)
 		EExpr type = EMEM;
 		intptr addr = t[i];
 		i++;
-
-		// case FUNCALL
-		ires = parse_call(t + i, addr, expr);
-		if (ires < 0) {
-			ERR("error in the parsing of an expression");
-			return -1;
-		} else if (ires != 0) {
-			i += ires;
-			break;
-		}
 
 		// case IDENTIFIER
 		SAVECST(expr, type, addr);
@@ -929,68 +1035,6 @@ parse_unop(const ETok *t, const ETok *eoe, intptr *expr)
 		break;
 	}
 
-	// Unop
-	case SIZEOF:
-		add++;
-	// fallthrough
-	case AT:
-		add++;
-	// fallthrough
-	case BXOR:
-		add++;
-	// fallthrough
-	case BNOT:
-		add++;
-	// fallthrough
-	case LNOT:
-		add++;
-	// fallthrough
-	case SUB: {
-		// Alloc unop
-		intptr uaddr = ftalloc(&ftast, sizeof(Unop));
-		*expr = uaddr;
-
-		// Save unop
-		Unop *unop = (Unop*) ftptr(&ftast, uaddr);
-		unop->type = EUNOP;
-		unop->op = add;
-
-		// Parse the following expression
-		intptr nxt = 0;
-		i++;
-		ires = parse_unop(t + i, eoe, &nxt);
-		if (ires < 0) {
-			return -1;
-		}
-		i += ires;
-		unop->expr = nxt;
-		break;
-	}
-	case LPAREN: {
-		const ETok eoeparen[] = {RPAREN, UNDEFINED};
-		// Alloc paren
-		intptr paddr = ftalloc(&ftast, sizeof(Paren));
-		*expr = paddr;
-
-		// Parse the expression
-		i++;
-		intptr res = -1;
-		ires = parse_expression(t + i, eoeparen, &res);
-		if (ires < 0) {
-			return -1;
-		}
-		i += ires;
-
-		// Save paren
-		Paren *paren = (Paren*) ftptr(&ftast, paddr);
-		paren->type = EPAREN;
-		paren->expr = res;
-
-
-		// Consume RPAREN
-		i++;
-		break;
-	}
 	default:
 		fprintf(stderr, "Unexpected token <%s>", tokenstrs[t[i]]);
 		return -1;
@@ -1027,6 +1071,269 @@ static const ETok tokbylvl[][LEVEL] = {
 };
 
 int
+parse_aftercall(const ETok *t, const ETok *eoe, intptr cexpr, intptr *expr)
+{
+	int i = 0;
+	int res = -1;
+
+	switch (t[i]) {
+	case DOT: {
+		i++;
+		if (t[i] != IDENTIFIER) {
+			ERR("After a <DOT> expects an identifier");
+			return -1;
+		}
+		i++;
+		intptr ident = t[i];
+		i++;
+
+		intptr aaddr = ftalloc(&ftast, sizeof(Access));
+		*expr = aaddr;
+		Access *ac = (Access*) ftptr(&ftast, aaddr);
+		ac->type = EACCESS;
+		ac->expr = cexpr;
+		ac->ident= ident;
+
+		res = parse_aftercall(t + i, eoe, aaddr, expr);
+		if (res < 0) {
+			ERR("Error when parsing an aftercall");
+			return -1;
+		}
+		i += res;
+
+		return i;
+	}
+	case LPAREN: {
+		intptr call = -1;
+		res = parse_call(t + i, cexpr, &call);
+		if (res < 0) {
+			ERR("error in the parsing of an expression");
+			return -1;
+		}
+		i += res;
+
+		res = parse_aftercall(t + i, eoe, call, expr);
+		if (res < 0) {
+			ERR("Error when parsing an aftercall");
+			return -1;
+		}
+		i += res;
+		return i;
+	}
+
+	case LBRACKETS: {
+		i++;
+		const ETok alteoe[] = {RBRACKETS, UNDEFINED};
+
+		intptr idxexpr = -1;
+		res = parse_expression(t + i, alteoe, &idxexpr);
+		if (res < 0) {
+			ERR("error in the parsing of an array subscripting");
+			return -1;
+		}
+		i += res;
+		// Consume `]`
+		i++;
+
+		intptr saddr = ftalloc(&ftast, sizeof(Subscr));
+		Subscr *sb = (Subscr*) ftptr(&ftast, saddr);
+		sb->type = ESUBSCR;
+		sb->idxexpr = idxexpr;
+		sb->expr = cexpr;
+
+		res = parse_aftercall(t + i, eoe, saddr, expr);
+		if (res < 0) {
+			ERR("Error when parsing an aftercall");
+			return -1;
+		}
+		i += res;
+		return i;
+	}
+	default:
+		break;
+	}
+	*expr = cexpr;
+	return i;
+}
+
+int
+parse_otherop(const ETok *t, const ETok *eoe, intptr *expr)
+{
+	int i = 0;
+	int res = -1;
+	intptr addr = -1;
+
+	res = parse_direct(t + i, &addr);
+	if (res < 0) {
+		return -1;
+	}
+	i += res;
+
+	switch (t[i]) {
+	case DOT: {
+		i++;
+		if (t[i] != IDENTIFIER) {
+			ERR("After a <DOT> expects an identifier");
+			return -1;
+		}
+		i++;
+		intptr ident = t[i];
+		i++;
+
+		intptr aaddr = ftalloc(&ftast, sizeof(Access));
+		Access *ac = (Access*) ftptr(&ftast, aaddr);
+		ac->type = EACCESS;
+		ac->expr = addr;
+		ac->ident= ident;
+
+		res = parse_aftercall(t + i, eoe, addr, expr);
+		if (res < 0) {
+			ERR("Error when parsing aftercall");
+			return -1;
+		}
+		i += res;
+
+		return i;
+	}
+	case LBRACKETS: {
+		i++;
+		const ETok alteoe[] = {RBRACKETS, UNDEFINED};
+
+		intptr idxexpr = -1;
+		res = parse_expression(t + i, alteoe, &idxexpr);
+		if (res < 0) {
+			ERR("error in the parsing of an array subscripting");
+			return -1;
+		}
+		i += res;
+		// Consume `]`
+		i++;
+
+		intptr saddr = ftalloc(&ftast, sizeof(Subscr));
+		Subscr *sb = (Subscr*) ftptr(&ftast, saddr);
+		sb->type = ESUBSCR;
+		sb->idxexpr = idxexpr;
+		sb->expr = addr;
+
+		res = parse_aftercall(t + i, eoe, saddr, expr);
+		if (res < 0) {
+			ERR("Error when parsing aftercall");
+			return -1;
+		}
+		i += res;
+		return i;
+	}
+	case LPAREN: {
+		intptr call = -1;
+		res = parse_call(t + i, addr, &call);
+		if (res < 0) {
+			ERR("error in the parsing of an expression");
+			return -1;
+		}
+		i += res;
+
+		res = parse_aftercall(t + i, eoe, call, expr);
+		if (res < 0) {
+			ERR("Error when parsing aftercall");
+			return -1;
+		}
+		i += res;
+		return i;
+	}
+	default:
+		*expr = addr;
+		return i;
+	}
+}
+
+int
+parse_unop(const ETok *t, const ETok *eoe, intptr *expr)
+{
+	int i = 0;
+	int res = 0;
+	int add = 0;
+
+	switch (t[i]) {
+	// Unop
+	case SIZEOF:
+		add++;
+	// fallthrough
+	case AT:
+		add++;
+	// fallthrough
+	case BXOR:
+		add++;
+	// fallthrough
+	case BNOT:
+		add++;
+	// fallthrough
+	case LNOT:
+		add++;
+	// fallthrough
+	case SUB: {
+		i++;
+		// Alloc unop
+		intptr uaddr = ftalloc(&ftast, sizeof(Unop));
+		*expr = uaddr;
+
+		// Save unop
+		Unop *unop = (Unop*) ftptr(&ftast, uaddr);
+		unop->type = EUNOP;
+		unop->op = add;
+
+		// Parse the following expression
+		intptr nxt = 0;
+		res = parse_unop(t + i, eoe, &nxt);
+		if (res < 0) {
+			ERR("Error when parsing an unop");
+			return -1;
+		}
+		i += res;
+		unop->expr = nxt;
+		return i;
+		break;
+	}
+	case LPAREN: {
+		i++;
+		const ETok eoeparen[] = {RPAREN, UNDEFINED};
+		// Alloc paren
+		intptr paddr = ftalloc(&ftast, sizeof(Paren));
+		*expr = paddr;
+		intptr in = -1;
+
+		// Parse the expression
+		res = parse_expression(t + i, eoeparen, &in);
+		if (res < 0) {
+			ERR("Error when parsing expression `( expr `)`");
+			return -1;
+		}
+		i += res;
+
+		// Save paren
+		Paren *paren = (Paren*) ftptr(&ftast, paddr);
+		paren->type = EPAREN;
+		paren->expr = in;
+
+		// Consume RPAREN
+		i++;
+
+		return i;
+		break;
+	}
+	default:
+		res = parse_otherop(t + i, eoe, expr);
+		if (res < 0) {
+			ERR("Error when parsing an expression");
+			return -1;
+		}
+		i += res;
+		return i;
+	}
+	ERR("Unreachable.");
+	return -1;
+}
+
+int
 parse_binop(const ETok *t, const ETok *eoe, intptr *expr, int lvl)
 {
 	int i = 0;
@@ -1035,7 +1342,7 @@ parse_binop(const ETok *t, const ETok *eoe, intptr *expr, int lvl)
 	intptr right = -1;
 
 	if (lvl > 1) {
-		res =  parse_binop(t + i, eoe, &left, lvl - 1);
+		res = parse_binop(t + i, eoe, &left, lvl - 1);
 	} else {
 		res = parse_unop(t + i, eoe, &left);
 	}
@@ -1084,6 +1391,7 @@ parse_expression(const ETok *t, const ETok *eoe, intptr *expr)
 
 	res = parse_binop(t, eoe, expr, LEVEL);
 	if (res < 0) {
+		ERR("parse_binop");
 		return -1;
 	}
 	i += res;
@@ -1202,7 +1510,7 @@ parse_toplevel_import(const ETok *t, intptr *stmt)
 	ident = t[i];
 	i++;
 
-	if(t[i] != SEMICOLON) {
+	if (t[i] != SEMICOLON) {
 		ERR("Exepects an <SEMICOLON>: `import` <IDENTIFIER> `;`");
 		return -1;
 	}

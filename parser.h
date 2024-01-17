@@ -85,9 +85,9 @@ typedef struct {
 
 typedef struct {
 	Stmt type;
-	intptr expr1;   // UnknownExpr*
-	intptr expr2;   // UnknownExpr*
-	intptr expr3;   // UnknownExpr*
+	intptr stmt1;   // UnknownStmt*
+	intptr stmt2;   // UnknownStmt*
+	intptr expr;    // UnknownExpr*
 	intptr forstmt; // UnknownStmt*
 } For;
 
@@ -115,6 +115,8 @@ typedef enum {
 	EUNOP,
 	ECALL,
 	EPAREN,
+	EACCESS,
+	ESUBSCR,
 	NEXPR,
 } EExpr;
 
@@ -179,7 +181,7 @@ typedef struct {
 
 typedef struct {
 	EExpr type;
-	intptr ident;
+	intptr expr;
 	int nparam;
 	intptr params;
 } Call;
@@ -188,6 +190,18 @@ typedef struct {
 	EExpr type;
 	intptr expr;
 } Paren;
+
+typedef struct {
+	EExpr type;
+	intptr expr;
+	intptr ident;
+} Access;
+
+typedef struct {
+	EExpr type;
+	intptr expr;
+	intptr idxexpr;
+} Subscr;
 
 int parse_toplevel(const ETok *t);
 void printexpr(FILE *fd, intptr expr);
