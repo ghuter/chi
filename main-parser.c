@@ -36,7 +36,7 @@ main(int argc, char *argv[])
 	do {
 		t = getnext();
 		ftalloc(&fttok, sizeof(Tok));
-		if (t.type != SPC) {
+		if (t.type != SPC && t.type != NEWLINE) {
 			tlst[ntok++] = t.type;
 		}
 	} while (t.type != EOI);

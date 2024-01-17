@@ -8,10 +8,10 @@ BIN = lexer parser
 all: $(BIN)
 
 MAIN_PARSER_OBJ = lex.o fatarena.o token.o parser.o
-parser: $(MAIN_PARSER_OBJ)
+parser: $(MAIN_PARSER_OBJ) main-parser.c
 	$(CC) $(CFLAGS) $(LDFLAGS) main-parser.c -o parser $(MAIN_PARSER_OBJ)
 
-parser.o:
+parser.o: parser.c
 	$(CC) $(CFLAGS) -c parser.c -o parser.o
 	
 LEXER_OBJS = lexer.o lex.o fatarena.o token.o

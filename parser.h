@@ -22,6 +22,8 @@ typedef enum {
 	SELSE,
 	SASSIGN,
 	SRETURN,
+	SFOR,
+	SCALL,
 	NSTATEMENT,
 } Stmt;
 
@@ -76,9 +78,24 @@ typedef struct {
 
 typedef struct {
 	Stmt type;
-	intptr stmt;  // UnknownStmt*
-	intptr nxt; // UnknownStmt*
+	intptr stmt; // UnknownStmt*
+	intptr nxt;  // UnknownStmt*
 } Seq;
+
+typedef struct {
+	Stmt type;
+	intptr expr1;   // UnknownExpr*
+	intptr expr2;   // UnknownExpr*
+	intptr expr3;   // UnknownExpr*
+	intptr forstmt; // UnknownStmt*
+} For;
+
+typedef struct {
+	Stmt type;
+	intptr ident;
+	int nparam;
+	intptr params;
+} SCall;
 
 // -------------------- Expression
 
