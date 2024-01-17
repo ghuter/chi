@@ -82,4 +82,4 @@ typedef struct {
 extern char *keywords[];
 extern char *tokenstrs[];
 
-#endif
+#endif /* TOKEN_H */

@@ -3,10 +3,17 @@
 
 CFLAGS = -g3 -Og -Wall -Wextra -pedantic -I./lib
 
-BIN = lexer
+BIN = lexer parser
 
 all: $(BIN)
 
+MAIN_PARSER_OBJ = lex.o fatarena.o token.o parser.o
+parser: $(MAIN_PARSER_OBJ)
+	$(CC) $(CFLAGS) $(LDFLAGS) main-parser.c -o parser $(MAIN_PARSER_OBJ)
+
+parser.o:
+	$(CC) $(CFLAGS) -c parser.c -o parser.o
+	
 LEXER_OBJS = lexer.o lex.o fatarena.o token.o
 lexer: $(LEXER_OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(LEXER_OBJS)

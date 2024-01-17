@@ -1,7 +1,12 @@
 #include <assert.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdint.h>
 
 #include "lib/token.h"
+#include "lib/fatarena.h"
+#include "parser.h"
+#include "lex.h"
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
@@ -10,12 +15,6 @@
     do { \
         fprintf(stderr, "TODO(%s): %s\n", TOSTRING(__LINE__), message); \
     } while (0)
-
-typedef int intptr;
-
-static int line = 0;
-FatArena fttok = {0};
-FatArena ftast = {0};
 
 #define BURNSEPARATORS(_t, _i)                 \
 	do {                                       \
@@ -57,23 +56,6 @@ do {                                             \
 #define ISMONADICOP(_op) (_op == SUB || _op == LNOT || _op == BNOT || _op == BXOR || _op == AT || _op == SIZEOF)
 #define ISBINOP(_op) (_op >= MUL && _op <= LNOT)
 #define TOKTOOP(_t) ((_t) - MUL)
-#define PRINTI() fprintf(stderr, "i(%d): %d\n", __LINE__, i)
-
-
-typedef enum {
-	NOP,
-	SSEQ,
-	SSTRUCT,
-	SENUM,
-	SINTERFACE,
-	SFUN,
-	SDECL,
-	SIF,
-	SELSE,
-	SASSIGN,
-	SRETURN,
-	NSTATEMENT,
-} Stmt;
 
 static const char *stmtstrs[NSTATEMENT] = {
 	[NOP]        = "NOP",
@@ -89,64 +71,52 @@ static const char *stmtstrs[NSTATEMENT] = {
 	[SRETURN]    = "SRETURN",
 };
 
-typedef struct {
-	Stmt type;
-	intptr ident;
-	intptr itype;
-	int cst;
-	intptr expr;
-} Decl;
+char *exprstrs[NEXPR] = {
+	[ENONE]   = "ENONE",
+	[ECSTI]   = "ECSTI",
+	[ECSTF]   = "ECSTF",
+	[ECSTS]   = "ECSTS",
+	[EMEM]    = "EMEM",
+	[EBINOP]  = "EBINOP",
+	[EUNOP]   = "EUNOP",
+	[ECALL]   = "ECALL",
+	[EPAREN]  = "EPAREN",
+};
 
-typedef struct {
-	intptr ident;
-	intptr type;
-} Member;
-
-typedef struct {
-	Stmt type;
-	intptr ident;
-	int nmember;
-	intptr members; // (Member*)
-} Struct;
-
-typedef struct {
-	Stmt type;
-	intptr ident;
-	intptr ret;
-	int nparam;
-	intptr params; // (Member*)
-	intptr stmt;
-} Fun;
-
-typedef struct {
-	Stmt type;
-	intptr ident;
-	intptr expr;
-} Assign;
-
-typedef struct {
-	Stmt type;
-	intptr expr;
-} Return;
-
-typedef struct {
-	Stmt type;
-	intptr cond;
-	intptr ifstmt;   // UnknownStmt*
-	intptr elsestmt; // UnknownStmt*
-} If;
-
-typedef struct {
-	Stmt type;
-	intptr stmt;  // UnknownStmt*
-	intptr nxt; // UnknownStmt*
-} Seq;
-
-typedef Stmt UnknownStmt;
+const char *opstrs[OP_NUM] = {
+	[OP_MUL]    = "MUL",
+	[OP_DIV]    = "DIV",
+	[OP_MOD]    = "MOD",
+	[OP_ADD]    = "ADD",
+	[OP_SUB]    = "SUB",
+	[OP_LSHIFT] = "LSHIFT",
+	[OP_RSHIFT] = "RSHIFT",
+	[OP_LT]     = "LT",
+	[OP_GT]     = "GT",
+	[OP_LE]     = "LE",
+	[OP_GE]     = "GE",
+	[OP_EQUAL]  = "EQUAL",
+	[OP_NEQUAL] = "NEQUAL",
+	[OP_BAND]   = "BAND",
+	[OP_BXOR]   = "BXOR",
+	[OP_BOR]    = "BOR",
+	[OP_LAND]   = "LAND",
+	[OP_LOR]    = "LOR",
+	[OP_BNOT]   = "BNOT",
+	[OP_LNOT]   = "LNOT",
+};
+const char *uopstrs[UOP_NUM] = {
+	[UOP_SUB]    = "SUB",
+	[UOP_LNOT]   = "LNOT",
+	[UOP_BNOT]   = "BNOT",
+	[UOP_BXOR]   = "BXOR",
+	[UOP_AT]     = "AT",
+	[UOP_SIZEOF] = "SIZEOF",
+};
 
 void printexpr(FILE *fd, intptr expr);
-int parse_expression(const ETok *t, const ETok *eoe, intptr *expr);
-int parse_fun_stmts(const ETok *t, intptr *stmt);
+static int parse_expression(const ETok *t, const ETok *eoe, intptr *expr);
+static int parse_fun_stmts(const ETok *t, intptr *stmt);
 
 void
 printstmt(FILE *fd, intptr stmt)
@@ -241,7 +211,7 @@ printstmt(FILE *fd, intptr stmt)
 	}
 }
 
-int
+static int
 parse_param(const ETok *t, Fun* fun)
 {
 	int i = 0;
@@ -303,7 +273,7 @@ parse_param(const ETok *t, Fun* fun)
 	return i;
 }
 
-int
+static int
 parse_fun_stmt(const ETok *t, intptr *stmt)
 {
 	const ETok eoe[] = {SEMICOLON, RBRACES, NEWLINE, UNDEFINED};
@@ -423,7 +393,7 @@ parse_fun_stmt(const ETok *t, intptr *stmt)
 			return -1;
 		}
 		i += res;
-		
+
 		if (t[i] != RBRACES) {
 			fprintf(stderr, "ERR: Unexpected token <%s>, expects a `}`\n", tokenstrs[t[i]]);
 		}
@@ -458,8 +428,9 @@ parse_fun_stmt(const ETok *t, intptr *stmt)
 	return -1;
 }
 
-int
-parse_fun_stmts(const ETok *t, intptr *stmt) {
+static int
+parse_fun_stmts(const ETok *t, intptr *stmt)
+{
 	TODO("fun stmts");
 
 	int i = 0;
@@ -490,26 +461,26 @@ parse_fun_stmts(const ETok *t, intptr *stmt) {
 		if (t[i] != RBRACES && t[i] != NEWLINE && t[i] != SEMICOLON) {
 			fprintf(stderr, "ERR: Unexpected token <%s>, expects `}` or `;` or `\\n`.\n", tokenstrs[t[i]]);
 			return -1;
-		} 
-		
+		}
+
 		if (t[i] == NEWLINE) {
 			line++;
 			i++;
 			intptr addr = ftalloc(&ftast, sizeof(Seq));
-			seq->nxt=addr;
+			seq->nxt = addr;
 			seq = (Seq*) ftptr(&ftast, addr);
 			seq->type = SSEQ;
-			seq->stmt= -1;
+			seq->stmt = -1;
 			seq->nxt = -1;
 		}
 
 		if (t[i] == SEMICOLON) {
 			i++;
 			intptr addr = ftalloc(&ftast, sizeof(Seq));
-			seq->nxt=addr;
+			seq->nxt = addr;
 			seq = (Seq*) ftptr(&ftast, addr);
 			seq->type = SSEQ;
-			seq->stmt= -1;
+			seq->stmt = -1;
 			seq->nxt = -1;
 		}
 	}
@@ -517,7 +488,7 @@ parse_fun_stmts(const ETok *t, intptr *stmt) {
 	return i;
 }
 
-int
+static int
 parse_toplevel_fun(const ETok *t, intptr ident, intptr *stmt)
 {
 	TODO("Toplevel fun");
@@ -532,7 +503,7 @@ parse_toplevel_fun(const ETok *t, intptr ident, intptr *stmt)
 	fun->ident = ident;
 	fun->type = SFUN;
 	fun->ret = -1;
-	fun->stmt= -1;
+	fun->stmt = -1;
 
 	res = parse_param(t + i, fun);
 	if (res < 0) {
@@ -557,7 +528,7 @@ parse_toplevel_fun(const ETok *t, intptr ident, intptr *stmt)
 	return i;
 }
 
-int
+static int
 parse_toplevel_interface(const ETok *t)
 {
 	(void)t;
@@ -565,7 +536,7 @@ parse_toplevel_interface(const ETok *t)
 	return -1;
 }
 
-int
+static int
 parse_toplevel_struct(const ETok *t, intptr ident, intptr *stmt)
 {
 	TODO("Toplevel struct");
@@ -648,7 +619,7 @@ err:
 	return -1;
 }
 
-int
+static int
 parse_toplevel_enum(const ETok *t)
 {
 	(void)t;
@@ -656,132 +627,6 @@ parse_toplevel_enum(const ETok *t)
 	return -1;
 }
 
-typedef enum {
-	ENONE,
-	ECSTI,
-	ECSTF,
-	ECSTS,
-	EMEM,
-	EBINOP,
-	EUNOP,
-	ECALL,
-	EPAREN,
-	NEXPR,
-} EExpr;
-
-char *exprstrs[NEXPR] = {
-	[ENONE]   = "ENONE",
-	[ECSTI]   = "ECSTI",
-	[ECSTF]   = "ECSTF",
-	[ECSTS]   = "ECSTS",
-	[EMEM]    = "EMEM",
-	[EBINOP]  = "EBINOP",
-	[EUNOP]   = "EUNOP",
-	[ECALL]   = "ECALL",
-	[EPAREN]  = "EPAREN",
-};
-
-typedef enum {
-	OP_MUL,
-	OP_DIV,
-	OP_MOD,
-	OP_ADD,
-	OP_SUB,
-	OP_LSHIFT,
-	OP_RSHIFT,
-	OP_LT,
-	OP_GT,
-	OP_LE,
-	OP_GE,
-	OP_EQUAL,
-	OP_NEQUAL,
-	OP_BAND,
-	OP_BXOR,
-	OP_BOR,
-	OP_LAND,
-	OP_LOR,
-	OP_BNOT,
-	OP_LNOT,
-	OP_NUM,
-} Op;
-
-const char *opstrs[OP_NUM] = {
-	[OP_MUL]    = "MUL",
-	[OP_DIV]    = "DIV",
-	[OP_MOD]    = "MOD",
-	[OP_ADD]    = "ADD",
-	[OP_SUB]    = "SUB",
-	[OP_LSHIFT] = "LSHIFT",
-	[OP_RSHIFT] = "RSHIFT",
-	[OP_LT]     = "LT",
-	[OP_GT]     = "GT",
-	[OP_LE]     = "LE",
-	[OP_GE]     = "GE",
-	[OP_EQUAL]  = "EQUAL",
-	[OP_NEQUAL] = "NEQUAL",
-	[OP_BAND]   = "BAND",
-	[OP_BXOR]   = "BXOR",
-	[OP_BOR]    = "BOR",
-	[OP_LAND]   = "LAND",
-	[OP_LOR]    = "LOR",
-	[OP_BNOT]   = "BNOT",
-	[OP_LNOT]   = "LNOT",
-};
-
-typedef enum {
-	UOP_SUB,
-	UOP_LNOT,
-	UOP_BNOT,
-	UOP_BXOR,
-	UOP_AT,
-	UOP_SIZEOF,
-	UOP_NUM,
-} Uop;
-
-const char *uopstrs[UOP_NUM] = {
-	[UOP_SUB]    = "SUB",
-	[UOP_LNOT]   = "LNOT",
-	[UOP_BNOT]   = "BNOT",
-	[UOP_BXOR]   = "BXOR",
-	[UOP_AT]     = "AT",
-	[UOP_SIZEOF] = "SIZEOF",
-};
-
-typedef EExpr UnknownExpr;
-
-typedef struct {
-	EExpr type;
-	intptr addr;
-} Csti;
-
-typedef Csti Cstf;
-typedef Csti Csts;
-typedef Csti Mem;
-
-typedef struct {
-	EExpr type;
-	Op op;
-	intptr left;
-	intptr right;
-} Binop;
-
-typedef struct {
-	EExpr type;
-	Uop op;
-	intptr expr;
-} Unop;
-
-typedef struct {
-	EExpr type;
-	intptr ident;
-	int nparam;
-	intptr params;
-} Call;
-
-typedef struct {
-	EExpr type;
-	intptr expr;
-} Paren;
 
 void
 printexpr(FILE* fd, intptr expr)
