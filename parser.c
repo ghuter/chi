@@ -207,7 +207,7 @@ printstmt(FILE *fd, intptr stmt)
 			fprintf(fd, ", ");
 			printstmt(fd, _if->elsestmt);
 		}
-
+		fprintf(fd, ")");
 		break;
 	}
 	case SSEQ: {
@@ -267,7 +267,7 @@ printexpr(FILE* fd, intptr expr)
 	}
 	case ECSTF: {
 		Cstf *cstf = (Cstf*) ptr;
-		fprintf(fd, "%s(%f)>", exprstrs[*ptr], *((double*) ftptr(&ftimmed, cstf->addr)));
+		fprintf(fd, "%s(%f)", exprstrs[*ptr], *((double*) ftptr(&ftimmed, cstf->addr)));
 		return;
 		break;
 	}
@@ -627,16 +627,11 @@ parse_fun_stmts(const ETok *t, intptr *stmt)
 	}
 	i++;
 
-	intptr saddr = ftalloc(&ftast, sizeof(Seq));
-	*stmt = saddr;
-
-	Seq *seq = (Seq*) ftptr(&ftast, saddr);
-	seq->type = SSEQ;
-	seq->stmt = -1;
-	seq->nxt = -1;
+	intptr retaddr;
+	intptr *saveaddr = &retaddr;
 
 	while (t[i] != RBRACES) {
-		res = parse_fun_stmt(t + i, &seq->stmt);
+		res = parse_fun_stmt(t + i, saveaddr);
 		if (res < 0) {
 			ERR("parsing fun statements");
 			return -1;
@@ -652,11 +647,13 @@ parse_fun_stmts(const ETok *t, intptr *stmt)
 			}
 
 			intptr addr = ftalloc(&ftast, sizeof(Seq));
-			seq->nxt = addr;
-			seq = (Seq*) ftptr(&ftast, addr);
+			intptr cpy = *saveaddr;
+			*saveaddr = addr;
+			Seq *seq = (Seq*) ftptr(&ftast, addr);
 			seq->type = SSEQ;
-			seq->stmt = -1;
+			seq->stmt = cpy;
 			seq->nxt = -1;
+			saveaddr = &seq->nxt;
 			break;
 
 		case RBRACES:
@@ -673,11 +670,13 @@ parse_fun_stmts(const ETok *t, intptr *stmt)
 			// Case right after a block
 			if (t[i-1] == RBRACES) {
 				intptr addr = ftalloc(&ftast, sizeof(Seq));
-				seq->nxt = addr;
-				seq = (Seq*) ftptr(&ftast, addr);
+				intptr cpy = *saveaddr;
+				*saveaddr = addr;
+				Seq *seq = (Seq*) ftptr(&ftast, addr);
 				seq->type = SSEQ;
-				seq->stmt = -1;
+				seq->stmt = cpy;
 				seq->nxt = -1;
+				saveaddr = &seq->nxt;
 				break;
 			}
 
@@ -686,6 +685,7 @@ parse_fun_stmts(const ETok *t, intptr *stmt)
 		}
 	}
 
+	*stmt = retaddr;
 	return i;
 }
 
