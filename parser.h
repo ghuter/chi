@@ -24,6 +24,7 @@ typedef enum {
 	SRETURN,
 	SFOR,
 	SCALL,
+	SIMPORT,
 	NSTATEMENT,
 } Stmt;
 
@@ -96,6 +97,11 @@ typedef struct {
 	int nparam;
 	intptr params;
 } SCall;
+
+typedef struct {
+	Stmt type;
+	intptr ident;
+} Import;
 
 // -------------------- Expression
 

@@ -81,6 +81,7 @@ static const char *stmtstrs[NSTATEMENT] = {
 	[SFOR]       = "SFOR",
 	[SCALL]      = "SCALL",
 	[SRETURN]    = "SRETURN",
+	[SIMPORT]    = "SIMPORT",
 };
 
 char *exprstrs[NEXPR] = {
@@ -242,6 +243,11 @@ printstmt(FILE *fd, intptr stmt)
 			printexpr(fd, paramtab[i]);
 		}
 		fprintf(fd, ")");
+		break;
+	}
+	case SIMPORT: {
+		Import *import = (Import*) ptr;
+		fprintf(fd, "%s(%s)", stmtstrs[*ptr], (char*) ftptr(&ftident, import->ident));
 		break;
 	}
 	default:
@@ -452,8 +458,6 @@ parse_fun_stmt(const ETok *t, intptr *stmt)
 			*stmt = caddr;
 			SCall *call = (SCall*) ftptr(&ftast, caddr);
 			call->type = SCALL;
-			printf("CURRENT(%d) parse fun call: %s\n", i, tokenstrs[t[i]]);
-			printf("CURRENT(%d) parse fun call: %s\n", i, tokenstrs[t[i+1]]);
 			return i;
 		}
 
@@ -503,7 +507,6 @@ parse_fun_stmt(const ETok *t, intptr *stmt)
 		break;
 	case IF: {
 		const ETok eoe[] = {LBRACES, UNDEFINED};
-		TODO("IF");
 		i++;
 		intptr iaddr = ftalloc(&ftast, sizeof(If));
 		*stmt = iaddr;
@@ -582,7 +585,6 @@ parse_fun_stmt(const ETok *t, intptr *stmt)
 			return -1;
 		}
 		i += res;
-		printf("CURRENT: %s\n", tokenstrs[t[i]]);
 
 		res = parse_fun_stmts(t + i, &forstmt);
 		if (res < 0) {
@@ -616,8 +618,6 @@ parse_fun_stmt(const ETok *t, intptr *stmt)
 static int
 parse_fun_stmts(const ETok *t, intptr *stmt)
 {
-	TODO("fun stmts");
-
 	int i = 0;
 	int res = -1;
 
@@ -638,7 +638,6 @@ parse_fun_stmts(const ETok *t, intptr *stmt)
 		}
 		i += res;
 
-		printf("CURRENT(%d): %s\n", i, tokenstrs[t[i]]);
 		switch(t[i]) {
 		case SEMICOLON:
 			i++;
@@ -692,8 +691,6 @@ parse_fun_stmts(const ETok *t, intptr *stmt)
 static int
 parse_toplevel_fun(const ETok *t, intptr ident, intptr *stmt)
 {
-	TODO("Toplevel fun");
-
 	int i = 0;
 	int res = -1;
 
@@ -740,7 +737,6 @@ parse_toplevel_interface(const ETok *t)
 static int
 parse_toplevel_struct(const ETok *t, intptr ident, intptr *stmt)
 {
-	TODO("Toplevel struct");
 	int i = 0;
 
 	intptr saddr = ftalloc(&ftast, sizeof(Struct));
@@ -1195,10 +1191,30 @@ parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
 int
 parse_toplevel_import(const ETok *t, intptr *stmt)
 {
-	(void)t;
-	(void)stmt;
-	TODO("IMPORT");
-	return -1;
+	int i = 0;
+	int ident = -1;
+
+	if (t[i] != IDENTIFIER) {
+		ERR("Exepects an <IDENTIFIER>: `import` <IDENTIFIER> `;`");
+		return -1;
+	}
+	i++;
+	ident = t[i];
+	i++;
+
+	if(t[i] != SEMICOLON) {
+		ERR("Exepects an <SEMICOLON>: `import` <IDENTIFIER> `;`");
+		return -1;
+	}
+	i++;
+
+	intptr iaddr = ftalloc(&ftast, sizeof(Import));
+	*stmt = iaddr;
+	Import *import = (Import*) ftptr(&ftast, iaddr);
+	import->type = SIMPORT;
+	import->ident = ident;
+
+	return i;
 }
 
 int
