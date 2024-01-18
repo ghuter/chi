@@ -26,82 +26,85 @@ typedef enum {
 	SCALL,
 	SIMPORT,
 	NSTATEMENT,
-} Stmt;
+} EStmt;
 
-typedef Stmt UnknownStmt;
+typedef EStmt UnknownStmt;
 
 typedef struct {
-	Stmt type;
+	EStmt kind;
 	intptr ident;
-	intptr itype;
+	intptr type;
+	int ptrlvl;
 	int cst;
 	intptr expr;
-} Decl;
+} SDecl;
 
 typedef struct {
 	intptr ident;
 	intptr type;
-} Member;
+	int ptrlvl;
+} SMember;
 
 typedef struct {
-	Stmt type;
+	EStmt kind;
 	intptr ident;
 	int nmember;
-	intptr members; // (Member*)
-} Struct;
+	intptr members; // (SMember*)
+} SStruct;
 
 typedef struct {
-	Stmt type;
+	EStmt kind;
 	intptr ident;
-	intptr ret;
+	intptr type; // Return type
+	int ptrlvl;
 	int nparam;
-	intptr params; // (Member*)
+	intptr params; // (SMember*)
 	intptr stmt;
-} Fun;
+} SFun;
 
 typedef struct {
-	Stmt type;
+	EStmt kind;
 	intptr ident;
 	intptr expr;
-} Assign;
+} SAssign;
 
 typedef struct {
-	Stmt type;
+	EStmt kind;
 	intptr expr;
-} Return;
+} SReturn;
 
 typedef struct {
-	Stmt type;
+	EStmt kind;
 	intptr cond;
 	intptr ifstmt;   // UnknownStmt*
 	intptr elsestmt; // UnknownStmt*
-} If;
+} SIf;
 
 typedef struct {
-	Stmt type;
+	EStmt kind;
 	intptr stmt; // UnknownStmt*
 	intptr nxt;  // UnknownStmt*
-} Seq;
+} SSeq;
 
 typedef struct {
-	Stmt type;
+	EStmt kind;
 	intptr stmt1;   // UnknownStmt*
 	intptr stmt2;   // UnknownStmt*
 	intptr expr;    // UnknownExpr*
 	intptr forstmt; // UnknownStmt*
-} For;
+} SFor;
 
 typedef struct {
-	Stmt type;
+	EStmt kind;
 	intptr ident;
 	int nparam;
 	intptr params;
 } SCall;
 
 typedef struct {
-	Stmt type;
+	EStmt kind;
 	intptr ident;
-} Import;
+} SImport;
 
 // -------------------- Expression
 
@@ -117,6 +120,7 @@ typedef enum {
 	EPAREN,
 	EACCESS,
 	ESUBSCR,
+	ESTRUCT,
 	NEXPR,
 } EExpr;
 
@@ -158,7 +162,7 @@ typedef enum {
 typedef EExpr UnknownExpr;
 
 typedef struct {
-	EExpr type;
+	EExpr kind;
 	intptr addr;
 } Csti;
 
@@ -167,41 +171,53 @@ typedef Csti Csts;
 typedef Csti Mem;
 
 typedef struct {
-	EExpr type;
+	EExpr kind;
 	Op op;
 	intptr left;
 	intptr right;
-} Binop;
+} EBinop;
 
 typedef struct {
-	EExpr type;
+	EExpr kind;
 	Uop op;
 	intptr expr;
-} Unop;
+} EUnop;
 
 typedef struct {
-	EExpr type;
+	EExpr kind;
 	intptr expr;
 	int nparam;
 	intptr params;
-} Call;
+} ECall;
 
 typedef struct {
-	EExpr type;
+	EExpr kind;
 	intptr expr;
-} Paren;
+} EParen;
 
 typedef struct {
-	EExpr type;
+	EExpr kind;
 	intptr expr;
 	intptr ident;
-} Access;
+} EAccess;
 
 typedef struct {
-	EExpr type;
+	EExpr kind;
 	intptr expr;
 	intptr idxexpr;
-} Subscr;
+} ESubscr;
+
+typedef struct {
+	intptr ident;
+	intptr expr;
+} EElem;
+
+typedef struct {
+	EExpr kind;
+	intptr ident;
+	int nelem;
+	intptr elems; // EExpr*
+} EStruct;
 
 int parse_toplevel(const ETok *t);
 void printexpr(FILE *fd, intptr expr);
