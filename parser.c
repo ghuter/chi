@@ -175,7 +175,9 @@ printstmt(FILE *fd, intptr stmt)
 		for (int i = 0; i < s->nmember; i++) {
 			fprintf(fd, ", <%s : ", (char*) ftptr(&ftident, members->ident));
 			int ptrlvl = members->ptrlvl;
-			while (ptrlvl-- > 0) fprintf(fd, "^");
+			while (ptrlvl-- > 0) {
+				fprintf(fd, "^");
+			}
 			fprintf(fd, "%s>", (char*) ftptr(&ftident, members->type));
 			members++;
 		}
@@ -187,7 +189,9 @@ printstmt(FILE *fd, intptr stmt)
 		char *type = decl->type ==  -1 ? "UNKNOWN" : (char*) ftptr(&ftident, decl->type);
 		fprintf(fd, "%s(%s : ", stmtstrs[*ptr], (char*) ftptr(&ftident, decl->ident));
 		int ptrlvl = decl->ptrlvl;
-		while (ptrlvl-- > 0) fprintf(fd, "^");
+		while (ptrlvl-- > 0) {
+			fprintf(fd, "^");
+		}
 		fprintf(fd, "%s, ", type);
 		printexpr(fd, decl->expr);
 		fprintf(fd, ")");
@@ -201,7 +205,9 @@ printstmt(FILE *fd, intptr stmt)
 		for (int i = 0; i < fun->nparam; i++) {
 			fprintf(fd, ", %s : ", (char*) ftptr(&ftident, members->ident));
 			int ptrlvl = members->ptrlvl;
-			while (ptrlvl-- > 0) fprintf(fd, "^");
+			while (ptrlvl-- > 0) {
+				fprintf(fd, "^");
+			}
 			fprintf(fd, "%s", (char*) ftptr(&ftident, members->type));
 			members++;
 		}
@@ -445,7 +451,7 @@ parse_param(const ETok *t, SFun* fun)
 			i++;
 		}
 
-		member->type= type;
+		member->type = type;
 		member->ident = ident;
 		member->ptrlvl = ptrlvl;
 
@@ -626,7 +632,7 @@ parse_fun_stmt(const ETok *t, intptr *stmt)
 		i++;
 
 		PTRLVL(t, i, type, ptrlvl);
-		if(ptrlvl == 0 && t[i] == IDENTIFIER) {
+		if (ptrlvl == 0 && t[i] == IDENTIFIER) {
 			i++;
 			type = t[i];
 			i++;
@@ -1069,9 +1075,9 @@ parse_struct_elem(const ETok *t, const intptr addr, intptr *expr)
 	*expr = saddr;
 
 	EElem elems[64];
-	int nelem= 0;
+	int nelem = 0;
 
-	// Parse the elems 
+	// Parse the elems
 	while (t[i] != RBRACES) {
 		if (t[i] != IDENTIFIER) {
 			ERR("Error when parsing a struct element, expects: <IDENTIFIER> `:` `expr`.");
@@ -1222,7 +1228,7 @@ parse_aftercall(const ETok *t, const ETok *eoe, intptr cexpr, intptr *expr)
 		EAccess *ac = (EAccess*) ftptr(&ftast, aaddr);
 		ac->kind = EACCESS;
 		ac->expr = cexpr;
-		ac->ident= ident;
+		ac->ident = ident;
 
 		res = parse_aftercall(t + i, eoe, aaddr, expr);
 		if (res < 0) {
@@ -1314,7 +1320,7 @@ parse_otherop(const ETok *t, const ETok *eoe, intptr *expr)
 		EAccess *ac = (EAccess*) ftptr(&ftast, aaddr);
 		ac->kind = EACCESS;
 		ac->expr = addr;
-		ac->ident= ident;
+		ac->ident = ident;
 
 		res = parse_aftercall(t + i, eoe, addr, expr);
 		if (res < 0) {
@@ -1552,7 +1558,7 @@ parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
 	i++;
 
 	PTRLVL(t, i, type, ptrlvl);
-	if(ptrlvl == 0 && t[i] == IDENTIFIER) {
+	if (ptrlvl == 0 && t[i] == IDENTIFIER) {
 		i++;
 		type = t[i];
 		i++;

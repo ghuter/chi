@@ -38,7 +38,7 @@ main(int argc, char **argv)
 			printf("key not found: '%s'\n", strings[i].data);
 		} else {
 			printf("key: '%s', cur. value: %d, new value: %ld\n",
-				strings[i].data, *val, i);
+			       strings[i].data, *val, i);
 			*val = i;
 		}
 	}

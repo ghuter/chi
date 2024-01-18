@@ -29,7 +29,7 @@ stri_upsert(Strimap **m, Str key, FatArena *perm)
 		if (streq(key, (*m)->key)) {
 			return &(*m)->val;
 		}
-		m = &(*m)->child[h>>62];
+		m = &(*m)->child[h >> 62];
 	}
 	if (!perm) {
 		return 0;

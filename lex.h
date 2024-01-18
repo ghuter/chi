@@ -6,6 +6,7 @@
 extern FatArena ftident;
 extern FatArena ftimmed;
 extern FatArena ftlit;
+extern FatArena fttmp;
 
 Tok	getnext(void);
 void printtok(FILE *o, Tok t);

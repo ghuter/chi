@@ -6,10 +6,12 @@
 #include <ctype.h>
 #include <assert.h>
 #include <inttypes.h>
+#include <stddef.h>
 
 #include "fatarena.h"
 #include "token.h"
 #include "lex.h"
+#include "lib/map.h"
 
 #define BUFSZ 512
 #define OK(_v) do {assert(_v);} while(0)
@@ -23,15 +25,32 @@ int fd = 0;
 FatArena ftident = {0};
 FatArena ftlit = {0};
 FatArena ftimmed = {0};
+FatArena fttmp = {0};
 
 static int
-strsave(const char *s)
+stri_insert(Str key)
 {
-	int len = strlen(s) + 1;
-	int idx = ftalloc(&ftident, len);
-	OK(idx >= 0 && "fail to allocate char*");
-	OK(ftwrite(&ftident, idx, (const uint8_t*) s, len) != 0 && "fail to write");
-	return idx;
+	static Strimap *mpident = {0};
+	Strimap **m = &mpident;
+
+	for (uint64_t h = strhash(key); *m; h <<= 2) {
+		if (streq(key, (*m)->key)) {
+			return ftidx(&ftident, (*m)->key.data);
+		}
+		m = &(*m)->child[h >> 62];
+	}
+	*m = (Strimap*)ftptr(&fttmp, ftalloc(&fttmp, sizeof(Strimap)));
+
+	// Alloc a new string
+	int addr = ftalloc(&ftident, key.len + 1);
+	uint8_t* str = ftptr(&ftident, addr);
+
+	memcpy(str, key.data, key.len);
+	str[key.len] = '\0';
+	key.data = str;
+
+	(*m)->key = key;
+	return addr;
 }
 
 static int
@@ -270,7 +289,7 @@ peek_literal(int *d)
 	return LITERAL;
 }
 
-static void
+static int
 peek_identifier(char *buf, char c)
 {
 	int len = 0;
@@ -284,6 +303,7 @@ peek_identifier(char *buf, char c)
 		forward();
 	}
 	buf[len++] = 0;
+	return len;
 }
 
 static Tok
@@ -475,7 +495,9 @@ peek(void)
 		if (c >= '0' && c <= '9') {
 			tok.type = peek_immediate(&idx, c);
 		} else {
-			peek_identifier(buf, c);
+			Str str = {0};
+			str.len = peek_identifier(buf, c);
+			str.data = (uint8_t*) buf;
 			int i;
 			for (i = NTOK + 1; i < NKEYWORDS; i++) {
 				/* fprintf(stderr, "(i == %d) comparing '%s' to '%s'..\n", i, buf, keywords[i]); */
@@ -486,7 +508,7 @@ peek(void)
 			}
 			if (i == NKEYWORDS) {
 				tok.type = IDENTIFIER;
-				idx = strsave(buf);
+				idx = stri_insert(str);
 			}
 		}
 		break;

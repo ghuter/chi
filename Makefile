@@ -7,14 +7,14 @@ BIN = lexer parser mapper
 
 all: $(BIN)
 
-MAIN_PARSER_OBJ = lex.o fatarena.o token.o parser.o
+MAIN_PARSER_OBJ = lex.o fatarena.o token.o parser.o map.o
 parser: $(MAIN_PARSER_OBJ) main-parser.c
 	$(CC) $(CFLAGS) $(LDFLAGS) main-parser.c -o parser $(MAIN_PARSER_OBJ)
 
 parser.o: parser.c
 	$(CC) $(CFLAGS) -c parser.c -o parser.o
 	
-LEXER_OBJS = lexer.o lex.o fatarena.o token.o
+LEXER_OBJS = map.o lexer.o lex.o fatarena.o token.o
 lexer: $(LEXER_OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(LEXER_OBJS)
 
