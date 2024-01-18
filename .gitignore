@@ -2,6 +2,7 @@ lexer
 parser
 analyzer
 mapper
+c0
 *.o
 tests/*/*.res
 tests/*/*.err

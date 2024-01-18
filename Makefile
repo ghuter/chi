@@ -3,7 +3,7 @@
 
 CFLAGS = -g3 -Og -Wall -Wextra -pedantic -I./lib
 
-BIN = lexer parser analyzer mapper
+BIN = lexer parser analyzer mapper c0
 
 all: $(BIN)
 
