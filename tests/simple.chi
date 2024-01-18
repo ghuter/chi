@@ -1,0 +1,27 @@
+import std;
+
+Point :: struct {
+	x: i32;
+	y: i32;
+}
+
+String :: struct {
+	ch: ^u8;
+	sz: u32;
+}
+
+toString :: fun (pts: ^Point) String {
+	str := newString();
+	sprintf(str.ch, "Point {x: %d, y:%d}", pts.x, pts.y);
+	return str;
+}
+
+pow2 :: fun (x: i32) i64 {
+	return x * x;
+}
+
+helloX :: fun (x: i32) {	
+	for i := 0; i < x; i += 1 {
+		puts("Hello !");
+	}
+}
