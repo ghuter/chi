@@ -10,5 +10,6 @@ extern FatArena fttmp;
 
 Tok	getnext(void);
 void printtok(FILE *o, Tok t);
+int stri_insert(Str key);
 
 #endif /* LEX_H */

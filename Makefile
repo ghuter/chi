@@ -3,11 +3,18 @@
 
 CFLAGS = -g3 -Og -Wall -Wextra -pedantic -I./lib
 
-BIN = lexer parser mapper
+BIN = lexer parser analyzer mapper
 
 all: $(BIN)
 
-MAIN_PARSER_OBJ = lex.o fatarena.o token.o parser.o map.o
+MAIN_ANALYZER_OBJ = fatarena.o token.o map.o lex.o parser.o analyzer.o
+analyzer: $(MAIN_ANALYZER_OBJ) main-analyzer.c
+	$(CC) $(CFLAGS) $(LDFLAGS) main-analyzer.c -o analyzer $(MAIN_ANALYZER_OBJ)
+
+analyzer.o: analyzer.c
+	$(CC) $(CFLAGS) -c analyzer.c -o analyzer.o
+
+MAIN_PARSER_OBJ = fatarena.o token.o map.o lex.o parser.o 
 parser: $(MAIN_PARSER_OBJ) main-parser.c
 	$(CC) $(CFLAGS) $(LDFLAGS) main-parser.c -o parser $(MAIN_PARSER_OBJ)
 

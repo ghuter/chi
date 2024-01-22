@@ -1,9 +1,10 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-// extern variables
+// -------------------- Memory
 
 extern FatArena ftast;
+extern FatArena ftsym;
 extern int line;
 
 typedef int intptr;
@@ -35,7 +36,7 @@ typedef struct {
 	intptr ident;
 	intptr type;
 	int ptrlvl;
-	int cst;
+	Bool cst;
 	intptr expr;
 } SDecl;
 
@@ -75,7 +76,7 @@ typedef struct {
 
 typedef struct {
 	EStmt kind;
-	intptr cond;
+	intptr cond;     // UnknownExpr*
 	intptr ifstmt;   // UnknownStmt*
 	intptr elsestmt; // UnknownStmt*
 } SIf;
@@ -89,8 +90,8 @@ typedef struct {
 typedef struct {
 	EStmt kind;
 	intptr stmt1;   // UnknownStmt*
-	intptr stmt2;   // UnknownStmt*
 	intptr expr;    // UnknownExpr*
+	intptr stmt2;   // UnknownStmt*
 	intptr forstmt; // UnknownStmt*
 } SFor;
 
@@ -171,55 +172,71 @@ typedef Csti Csts;
 typedef Csti Mem;
 
 typedef struct {
-	EExpr kind;
-	Op op;
+	EExpr  kind;
+	Op     op;
 	intptr left;
 	intptr right;
+	intptr type;
+	int    ptrlvl;
 } EBinop;
 
 typedef struct {
-	EExpr kind;
-	Uop op;
+	EExpr  kind;
+	Uop    op;
 	intptr expr;
+	intptr type;
+	int    ptrlvl;
 } EUnop;
 
 typedef struct {
-	EExpr kind;
+	EExpr  kind;
 	intptr expr;
-	int nparam;
+	int    nparam;
 	intptr params;
+	intptr type;
+	int    ptrlvl;
 } ECall;
 
 typedef struct {
-	EExpr kind;
+	EExpr  kind;
 	intptr expr;
+	intptr type;
+	int    ptrlvl;
 } EParen;
 
 typedef struct {
-	EExpr kind;
+	EExpr  kind;
 	intptr expr;
 	intptr ident;
+	intptr type;
+	int    ptrlvl;
 } EAccess;
 
 typedef struct {
-	EExpr kind;
+	EExpr  kind;
 	intptr expr;
 	intptr idxexpr;
+	intptr type;
+	int    ptrlvl;
 } ESubscr;
 
 typedef struct {
 	intptr ident;
 	intptr expr;
+	intptr type;
+	int    ptrlvl;
 } EElem;
 
 typedef struct {
 	EExpr kind;
 	intptr ident;
 	int nelem;
-	intptr elems; // EExpr*
+	intptr elems; // EElem*
 } EStruct;
 
-int parse_toplevel(const ETok *t);
+// -------------------- Functions
+
+int parse_toplevel(const ETok *t, intptr *stmt);
 void printexpr(FILE *fd, intptr expr);
 void printstmt(FILE *fd, intptr stmt);
 

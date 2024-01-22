@@ -1,22 +1,25 @@
 #define _DEFAULT_SOURCE
-
 #include <string.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <stdint.h>
 
-typedef struct FatArena {
-	uint8_t *addr;
-	size_t remain;
-	size_t size;
-} FatArena;
+#include "fatarena.h"
 
-typedef int Bool;
+size_t
+getpgsz()
+{
+	static size_t pgsz = 0;
+	if (!pgsz) {
+		pgsz = sysconf(_SC_PAGESIZE);
+	}
+	return pgsz;
+}
 
 Bool
 ftnew(FatArena *a, size_t sz)
 {
-	size_t pgsz = sysconf(_SC_PAGESIZE);
+	size_t pgsz = getpgsz();
 	size_t fatsz = pgsz;
 	while (fatsz < sz) {
 		fatsz += pgsz;

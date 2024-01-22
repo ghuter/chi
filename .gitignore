@@ -1,5 +1,6 @@
 lexer
 parser
+analyzer
 mapper
 *.o
 tests/*.res

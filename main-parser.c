@@ -1,14 +1,22 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stddef.h>
 
 #include "fatarena.h"
 #include "token.h"
+#include "lib/map.h"
 #include "lex.h"
 #include "parser.h"
 
-FatArena fttok = {0};
-FatArena ftast = {0};
+FatArena fttok   = {0};
+FatArena ftident = {0};
+FatArena ftlit   = {0};
+FatArena ftimmed = {0};
+FatArena fttmp   = {0};
+FatArena ftast   = {0};
+FatArena ftsym   = {0};
+
 int line = 0;
 
 int
@@ -42,6 +50,18 @@ main(int argc, char *argv[])
 		}
 	} while (t.type != EOI);
 
-	parse_toplevel(tlst);
+	int i = 0;
+	int res = -1;
+	intptr stmt = -1;
+	while (tlst[i] != EOI) {
+		res = parse_toplevel(tlst + i, &stmt);
+		if (res < 0) {
+			fprintf(stderr, "Error when parsing toplevel stmt.\n");
+			return 1;
+		}
+		printstmt(stderr, stmt);
+		fprintf(stderr, "\n");
+		i += res;
+	}
 }
 

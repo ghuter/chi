@@ -10,8 +10,8 @@
 
 #include "fatarena.h"
 #include "token.h"
-#include "lex.h"
 #include "lib/map.h"
+#include "lex.h"
 
 #define BUFSZ 512
 #define OK(_v) do {assert(_v);} while(0)
@@ -22,15 +22,11 @@ int hold = 0;
 int holdc = 0;
 int fd = 0;
 
-FatArena ftident = {0};
-FatArena ftlit = {0};
-FatArena ftimmed = {0};
-FatArena fttmp = {0};
+static Strimap *mpident = {0};
 
-static int
+int
 stri_insert(Str key)
 {
-	static Strimap *mpident = {0};
 	Strimap **m = &mpident;
 
 	for (uint64_t h = strhash(key); *m; h <<= 2) {
@@ -496,7 +492,7 @@ peek(void)
 			tok.type = peek_immediate(&idx, c);
 		} else {
 			Str str = {0};
-			str.len = peek_identifier(buf, c);
+			str.len = peek_identifier(buf, c) - 1;
 			str.data = (uint8_t*) buf;
 			int i;
 			for (i = NTOK + 1; i < NKEYWORDS; i++) {

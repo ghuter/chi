@@ -6,14 +6,13 @@
 #include "lib/token.h"
 #include "lib/fatarena.h"
 #include "parser.h"
-#include "lex.h"
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 
 #define TODO(message) \
     do { \
-        fprintf(stderr, "TODO(%s): %s\n", TOSTRING(__LINE__), message); \
+        fprintf(stderr, "TODO(%d): %s\n", __LINE__, message); \
     } while (0)
 
 #define ERR(...) fprintf(stderr, "ERR(%d,%d): ", __LINE__, line); fprintf(stderr, __VA_ARGS__), fprintf(stderr, "\n")
@@ -84,6 +83,10 @@ do {                                                                            
 #define ISMONADICOP(_op) (_op == SUB || _op == LNOT || _op == BNOT || _op == BXOR || _op == AT || _op == SIZEOF)
 #define ISBINOP(_op) (_op >= MUL && _op <= LNOT)
 #define TOKTOOP(_t) ((_t) - MUL)
+
+extern FatArena ftident;
+extern FatArena ftimmed;
+extern FatArena ftlit;
 
 static const char *stmtstrs[NSTATEMENT] = {
 	[NOP]        = "NOP",
@@ -1665,38 +1668,33 @@ parse_toplevel_import(const ETok *t, intptr *stmt)
 }
 
 int
-parse_toplevel(const ETok *t)
+parse_toplevel(const ETok *t, intptr *stmt)
 {
 	int i = 0;
 	int ident = -1;
 	int res = -1;
-	intptr stmt;
 
-	while (t[i] != EOI) {
-		switch (t[i]) {
-		case IDENTIFIER:
-			i++;
-			ident = t[i];
-			i++;
-			res = parse_toplevel_decl(t + i, ident, &stmt);
-			break;
-		case IMPORT:
-			i++;
-			res = parse_toplevel_import(t + i, &stmt);
-			break;
-		default:
-			ERR("Unexpected token: <%s> toplevel", tokenstrs[t[i]]);
-			return -1;
-		}
-
-		if (res < 0) {
-			return -1;
-		}
-		i += res;
-		printstmt(stderr, stmt);
-		fprintf(stderr, "\n");
-		BURNNEWLINE(t, i);
+	switch (t[i]) {
+	case IDENTIFIER:
+		i++;
+		ident = t[i];
+		i++;
+		res = parse_toplevel_decl(t + i, ident, stmt);
+		break;
+	case IMPORT:
+		i++;
+		res = parse_toplevel_import(t + i, stmt);
+		break;
+	default:
+		ERR("Unexpected token: <%s> toplevel", tokenstrs[t[i]]);
+		return -1;
 	}
-	return 0;
+
+	if (res < 0) {
+		return -1;
+	}
+	i += res;
+
+	return i;
 }
 

@@ -9,7 +9,8 @@ typedef struct FatArena {
 
 typedef int Bool;
 
-Bool ftnew(FatArena *a, unsigned int pages);
+size_t getpgsz();
+Bool ftnew(FatArena *a, size_t pages);
 int ftalloc(FatArena *a, size_t sz);
 Bool ftwrite(FatArena *a, int idx, const uint8_t *ptr, size_t sz);
 Bool ftread(const FatArena *a, int idx, uint8_t *ptr, size_t sz);

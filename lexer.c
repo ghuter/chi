@@ -1,10 +1,17 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stddef.h>
 
 #include "fatarena.h"
 #include "token.h"
+#include "lib/map.h"
 #include "lex.h"
+
+FatArena ftident = {0};
+FatArena ftlit = {0};
+FatArena ftimmed = {0};
+FatArena fttmp = {0};
 
 int
 main(int argc, char *argv[])
