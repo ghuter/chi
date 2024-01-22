@@ -88,7 +88,7 @@ extern FatArena ftident;
 extern FatArena ftimmed;
 extern FatArena ftlit;
 
-static const char *stmtstrs[NSTATEMENT] = {
+const char *stmtstrs[NSTATEMENT] = {
 	[NOP]        = "NOP",
 	[SSEQ]       = "SSEQ",
 	[SSTRUCT]    = "SSTRUCT",
@@ -105,7 +105,7 @@ static const char *stmtstrs[NSTATEMENT] = {
 	[SIMPORT]    = "SIMPORT",
 };
 
-char *exprstrs[NEXPR] = {
+const char *exprstrs[NEXPR] = {
 	[ENONE]   = "ENONE",
 	[ECSTI]   = "ECSTI",
 	[ECSTF]   = "ECSTF",

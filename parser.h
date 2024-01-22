@@ -240,5 +240,10 @@ int parse_toplevel(const ETok *t, intptr *stmt);
 void printexpr(FILE *fd, intptr expr);
 void printstmt(FILE *fd, intptr stmt);
 
+extern const char *uopstrs[UOP_NUM];
+extern const char *stmtstrs[NSTATEMENT];
+extern const char *opstrs[OP_NUM];
+extern const char *exprstrs[NEXPR];
+
 #endif /* PARSER_H */
 

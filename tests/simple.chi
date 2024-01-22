@@ -1,5 +1,8 @@
 import std;
 
+max :: 10.0 - 1;
+p :: Point {x: 10, y: 10};
+
 toString :: fun (pts: ^Point) String {
 	str := newString();
 	sprintf(str.ch, "Point {x: %d, y:%d}", pts.x, pts.y);
