@@ -83,6 +83,7 @@ do {                                                                            
 #define ISMONADICOP(_op) (_op == SUB || _op == LNOT || _op == BNOT || _op == BXOR || _op == AT || _op == SIZEOF)
 #define ISBINOP(_op) (_op >= MUL && _op <= LNOT)
 #define TOKTOOP(_t) ((_t) - MUL)
+#define TYPESTR(_type) (_type == -1 ? "?" : (char*) ftptr(&ftident, _type))
 
 extern FatArena ftident;
 extern FatArena ftimmed;
@@ -189,19 +190,19 @@ printstmt(FILE *fd, intptr stmt)
 	}
 	case SDECL: {
 		SDecl *decl = (SDecl*) ptr;
-		char *type = decl->type ==  -1 ? "UNKNOWN" : (char*) ftptr(&ftident, decl->type);
-		fprintf(fd, "%s(%s : ", stmtstrs[*ptr], (char*) ftptr(&ftident, decl->ident));
+		char *type = decl->type ==  -1 ? "?" : (char*) ftptr(&ftident, decl->type);
+		fprintf(fd, "%s(%s, ", stmtstrs[*ptr], (char*) ftptr(&ftident, decl->ident));
+		printexpr(fd, decl->expr);
 		int ptrlvl = decl->ptrlvl;
 		while (ptrlvl-- > 0) {
 			fprintf(fd, "^");
 		}
-		fprintf(fd, "%s, ", type);
-		printexpr(fd, decl->expr);
-		fprintf(fd, ")");
+		fprintf(fd, ") : %s", type);
 		break;
 	}
 	case SFUN: {
 		SFun *fun = (SFun*) ptr;
+		char *ret = fun->type ==  -1 ? "void" : (char*) ftptr(&ftident, fun->type);
 		fprintf(fd, "%s(%s", stmtstrs[*ptr], (char*)ftptr(&ftident, fun->ident));
 
 		SMember* members = (SMember*) ftptr(&ftast, fun->params);
@@ -214,28 +215,32 @@ printstmt(FILE *fd, intptr stmt)
 			fprintf(fd, "%s", (char*) ftptr(&ftident, members->type));
 			members++;
 		}
-
-		char *ret = fun->type ==  -1 ? "UNKNOWN" : (char*) ftptr(&ftident, fun->type);
-		fprintf(fd, ", -> %s, {", ret);
+		fprintf(fd, ", {");
 		printstmt(fd, fun->stmt);
 		fprintf(fd, "}");
-		fprintf(fd, ")");
+		fprintf(fd, ") : ");
 
-		break;
+		int ptrlvl = fun->ptrlvl;
+		while (ptrlvl-- > 0) {
+			fprintf(fd, "^");
+		}
+		fprintf(fd, "%s", ret);
+
+		return;
 	}
 	case SRETURN: {
 		SReturn *ret = (SReturn*) ptr;
 		fprintf(fd, "%s(", stmtstrs[*ptr]);
 		printexpr(fd, ret->expr);
 		fprintf(fd, ")");
-		break;
+		return;
 	}
 	case SASSIGN: {
 		SAssign *assign = (SAssign*) ptr;
 		fprintf(fd, "%s(%s, ", stmtstrs[*ptr], (char*) ftptr(&ftident, assign->ident));
 		printexpr(fd, assign->expr);
 		fprintf(fd, ")");
-		break;
+		return;
 	}
 	case SIF: {
 		SIf *_if = (SIf*) ptr;
@@ -249,7 +254,7 @@ printstmt(FILE *fd, intptr stmt)
 			printstmt(fd, _if->elsestmt);
 		}
 		fprintf(fd, ")");
-		break;
+		return;
 	}
 	case SSEQ: {
 		SSeq *seq = (SSeq*) ptr;
@@ -258,7 +263,7 @@ printstmt(FILE *fd, intptr stmt)
 		fprintf(fd, ", ");
 		printstmt(fd, seq->nxt);
 		fprintf(fd, ")");
-		break;
+		return;
 	}
 	case SFOR: {
 		SFor *_for = (SFor*) ptr;
@@ -271,7 +276,7 @@ printstmt(FILE *fd, intptr stmt)
 		fprintf(fd, ", ");
 		printstmt(fd, _for->forstmt);
 		fprintf(fd, ")");
-		break;
+		return;
 	}
 	case SCALL: {
 		SCall *call = (SCall*) ptr;
@@ -283,7 +288,7 @@ printstmt(FILE *fd, intptr stmt)
 			printexpr(fd, paramtab[i]);
 		}
 		fprintf(fd, ")");
-		break;
+		return;
 	}
 	case SIMPORT: {
 		SImport *import = (SImport*) ptr;
@@ -304,51 +309,57 @@ printexpr(FILE* fd, intptr expr)
 	case ENONE:
 		fprintf(fd, "<NONE>");
 		return;
-		break;
 	case ECSTI: {
 		Csti *csti = (Csti*) ptr;
 		fprintf(fd, "%s(%ld)", exprstrs[*ptr], *((int64_t*) ftptr(&ftimmed, csti->addr)));
 		return;
-		break;
 	}
 	case ECSTF: {
 		Cstf *cstf = (Cstf*) ptr;
 		fprintf(fd, "%s(%f)", exprstrs[*ptr], *((double*) ftptr(&ftimmed, cstf->addr)));
 		return;
-		break;
 	}
 	case ECSTS: {
 		Csts *csts = (Csts*) ptr;
 		fprintf(fd, "%s(%s)", exprstrs[*ptr], (char*) ftptr(&ftlit, csts->addr));
 		return;
-		break;
 	}
 	case EMEM: {
 		Mem *mem = (Mem*) ptr;
 		fprintf(fd, "%s(%s)", exprstrs[*ptr], (char*) ftptr(&ftident, mem->addr));
 		return;
-		break;
 	}
 	case EBINOP: {
 		EBinop *binop = (EBinop*) ptr;
+		char* type = TYPESTR(binop->type);
 		fprintf(fd, "%s(%s, ", exprstrs[*ptr], opstrs[binop->op]);
 		printexpr(fd, binop->left);
 		fprintf(fd, ", ");
 		printexpr(fd, binop->right);
-		fprintf(fd, ")");
+		fprintf(fd, ") : ");
+		int ptrlvl = binop->ptrlvl;
+		while (ptrlvl -- > 0) {
+			fprintf(fd, "^");
+		}
+		fprintf(fd, "%s", type);
 		return;
-		break;
 	}
 	case EUNOP: {
 		EUnop *unop = (EUnop*) ptr;
+		char* type = TYPESTR(unop->type);
 		fprintf(fd, "%s(%s, ", exprstrs[*ptr], uopstrs[unop->op]);
 		printexpr(fd, unop->expr);
-		fprintf(fd, ")");
+		fprintf(fd, ") : ");
+		int ptrlvl = unop->ptrlvl;
+		while (ptrlvl -- > 0) {
+			fprintf(fd, "^");
+		}
+		fprintf(fd, "%s", type);
 		return;
-		break;
 	}
 	case ECALL: {
 		ECall *call = (ECall*) ptr;
+		char* type = TYPESTR(call->type);
 		intptr *paramtab = (intptr*) ftptr(&ftast, call->params);
 
 		fprintf(fd, "%s(", exprstrs[*ptr]);
@@ -357,36 +368,56 @@ printexpr(FILE* fd, intptr expr)
 			fprintf(fd, ", ");
 			printexpr(fd, paramtab[i]);
 		}
-		fprintf(fd, ")");
+		fprintf(fd, ") : ");
+		int ptrlvl = call->ptrlvl;
+		while (ptrlvl -- > 0) {
+			fprintf(fd, "^");
+		}
+		fprintf(fd, "%s", type);
 		return;
-		break;
 	}
 	case EPAREN: {
 		EParen *paren = (EParen*) ptr;
+		char* type = TYPESTR(paren->type);
 		fprintf(fd, "%s(", exprstrs[*ptr]);
 		printexpr(fd, paren->expr);
-		fprintf(fd, ")");
+		fprintf(fd, ") : ");
+		int ptrlvl = paren->ptrlvl;
+		while (ptrlvl -- > 0) {
+			fprintf(fd, "^");
+		}
+		fprintf(fd, "%s", type);
 		return;
-		break;
 	}
 	case EACCESS: {
 		EAccess *ac = (EAccess*) ptr;
+		char* type = TYPESTR(ac->type);
 		fprintf(fd, "%s(", exprstrs[*ptr]);
 		printexpr(fd, ac->expr);
 		fprintf(fd, ".");
 		fprintf(fd, "%s", (char*) ftptr(&ftident, ac->ident));
-		fprintf(fd, ")");
+		fprintf(fd, ") : ");
+		int ptrlvl = ac->ptrlvl;
+		while (ptrlvl -- > 0) {
+			fprintf(fd, "^");
+		}
+		fprintf(fd, "%s", type);
 		return;
-		break;
 	}
 	case ESUBSCR: {
 		ESubscr *sb = (ESubscr*) ptr;
+		char* type = TYPESTR(sb->type);
 		fprintf(fd, "%s(", exprstrs[*ptr]);
 		printexpr(fd, sb->expr);
 		fprintf(fd, "[");
 		printexpr(fd, sb->idxexpr);
-		fprintf(fd, "])");
-		break;
+		fprintf(fd, "]) : ");
+		int ptrlvl = sb->ptrlvl;
+		while (ptrlvl -- > 0) {
+			fprintf(fd, "^");
+		}
+		fprintf(fd, "%s", type);
+		return;
 	}
 	case ESTRUCT: {
 		EStruct *st = (EStruct*) ptr;
@@ -400,7 +431,7 @@ printexpr(FILE* fd, intptr expr)
 			elem++;
 		}
 		fprintf(fd, "})");
-		break;
+		return;
 	}
 	default:
 		assert(1 || "Unreachable epxr");
@@ -1051,6 +1082,8 @@ parse_call(const ETok *t, const intptr addr, intptr *d)
 	call->expr = addr;
 	call->nparam = nparam;
 	call->params = ftalloc(&ftast, nparam * sizeof(intptr));
+	call->type = -1;
+	call->ptrlvl = 0;
 	intptr *cparams = (intptr*) ftptr(&ftast, call->params);
 	memcpy(cparams, params, sizeof(intptr) * nparam);
 
@@ -1142,7 +1175,7 @@ parse_direct(const ETok *t, intptr *expr)
 		intptr addr = t[i];
 		i++;
 
-		// Case init a struct
+		// case init a struct
 		if (t[i] == LBRACES) {
 			res = parse_struct_elem(t + i, addr, expr);
 			if (res < 0) {
@@ -1150,7 +1183,6 @@ parse_direct(const ETok *t, intptr *expr)
 				return -1;
 			}
 			i += res;
-
 			return i;
 		}
 

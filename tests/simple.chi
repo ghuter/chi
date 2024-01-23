@@ -1,11 +1,17 @@
 import std;
 
-max :: 10.0 - 1;
-p :: Point {x: 10, y: 10};
+max :f64: 10.0 - 1;
+p :: Point { x: 10, y: 10 };
+str :: String { ch: "Hello", sz: 10 };
+y : i8 : 10;
 
 toString :: fun (pts: ^Point) String {
 	str := newString();
-	sprintf(str.ch, "Point {x: %d, y:%d}", pts.x, pts.y);
+	puts("TODO");
+	return str;
+}
+
+newString :: fun () String {
 	return str;
 }
 
@@ -20,6 +26,10 @@ String :: struct {
 }
 
 pow2 :: fun() i8 { return 1; }
+
+puts :: fun (ch: ^u8) i32 {
+	return 1;
+}
 
 helloX :: fun (x: i32) {	
 	for i := 0; i < x; i += 1 {

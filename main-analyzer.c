@@ -53,6 +53,8 @@ Symbols funsym = {0};
 Symbols identsym = {0};
 Symbols typesym = {0};
 
+SymInfo *syminfo = NULL;
+
 int fstlangtype = -1;
 int lstlangtype = -1;
 
@@ -136,7 +138,7 @@ main(int argc, char *argv[])
 		case SDECL: {
 			SDecl* decl = ((SDecl*) stmtptr);
 			ident = decl->ident;
-			res = insertglobalconst(&identsym, decl, stmt);
+			res = inserttopdcl(&identsym, ident, stmt);
 			break;
 		}
 		case SFUN: {
@@ -163,18 +165,33 @@ main(int argc, char *argv[])
 	}
 
 	// -------------------- Analyzing
+	intptr info = ftalloc(&ftsym, sizeof(SymInfo) * 10000);
+	syminfo = (SymInfo*) ftptr(&ftsym, info);
+	int nsym = 0;
+
+	Symbol *sym = (Symbol*) ftptr(&ftsym, typesym.array);
+	for (int i = 0; i < typesym.nsym; i++) {
+		SStruct* str = (SStruct*) ftptr(&ftast, sym[i].stmt);
+		assert(analyzetype(str));
+	}
+
+	Symbol *symd = (Symbol*) ftptr(&ftsym, identsym.array);
+	for (int i = 0; i < identsym.nsym; i++) {
+		SDecl *decl = (SDecl*) ftptr(&ftast, symd[i].stmt);
+		assert(analyzeglobalcst(decl, nsym));
+		nsym++;
+	}
+	printsymbolsinfo(nsym);
+
+	Symbol *symf = (Symbol*) ftptr(&ftsym, funsym.array);
+	for (int i = 0; i < funsym.nsym; i++) {
+		SFun* fun = (SFun*) ftptr(&ftast, symf[i].stmt);
+		assert(analyzefun(fun, nsym));
+	}
 
 	printsymbols(&typesym);
 	printsymbols(&identsym);
 	printsymbols(&funsym);
-
-	Symbol *sym = (Symbol*) ftptr(&ftsym, typesym.array);
-	SStruct* str = (SStruct*) ftptr(&ftast, sym->stmt);
-	assert(analyzetype(str));
-
-	Symbol *symf = (Symbol*) ftptr(&ftsym, funsym.array);
-	SFun* fun = (SFun*) ftptr(&ftast, symf->stmt);
-	assert(analyzefun(fun));
 }
 
 

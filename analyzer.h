@@ -49,9 +49,9 @@ extern char* langtypestr[NLANGTYPE];
 // -------------------- Functions
 
 void printsymbols(Symbols *syms);
+void printsymbolsinfo(int nsym);
 Bool inserttopdcl(Symbols *syms, intptr ident, intptr stmt);
 Bool analyzetype(SStruct *stmt);
-Bool analyzefun(SFun *fun);
-Bool insertglobalconst(Symbols *syms, SDecl *decl, intptr stmt);
-
+Bool analyzeglobalcst(SDecl *decl, int nelem);
+Bool analyzefun(SFun *fun, int nsym);
 #endif /* ANALYSE_H */

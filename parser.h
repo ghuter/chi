@@ -99,7 +99,7 @@ typedef struct {
 	EStmt kind;
 	intptr ident;
 	int nparam;
-	intptr params;
+	intptr params; // [Expr*]
 } SCall;
 
 typedef struct {
@@ -192,7 +192,7 @@ typedef struct {
 	EExpr  kind;
 	intptr expr;
 	int    nparam;
-	intptr params;
+	intptr params; // [Expr*]
 	intptr type;
 	int    ptrlvl;
 } ECall;
