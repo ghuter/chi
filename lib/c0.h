@@ -19,6 +19,7 @@ typedef unsigned short f16;
 typedef float f32;
 typedef double f64;
 typedef void* ptr;
+typedef int bool;
 
 
 /* --- Read --- */
@@ -581,86 +582,86 @@ xori128(i128 lhs, i128 rhs)
 
 /* --- Equal --- */
 
-FORCE_INLINE int eqi8(i8 a, i8 b) { return a == b; }
-FORCE_INLINE int eqi16(i16 a, i16 b) { return a == b; }
-FORCE_INLINE int eqi32(i32 a, i32 b) { return a == b; }
-FORCE_INLINE int eqi64(i64 a, i64 b) { return a == b; }
-FORCE_INLINE int eqi128(i128 a, i128 b) { return a == b; }
-FORCE_INLINE int equ8(u8 a, u8 b) { return a == b; }
-FORCE_INLINE int equ16(u16 a, u16 b) { return a == b; }
-FORCE_INLINE int equ32(u32 a, u32 b) { return a == b; }
-FORCE_INLINE int equ64(u64 a, u64 b) { return a == b; }
-FORCE_INLINE int equ128(u128 a, u128 b) { return a == b; }
+FORCE_INLINE bool eqi8(i8 a, i8 b) { return a == b; }
+FORCE_INLINE bool eqi16(i16 a, i16 b) { return a == b; }
+FORCE_INLINE bool eqi32(i32 a, i32 b) { return a == b; }
+FORCE_INLINE bool eqi64(i64 a, i64 b) { return a == b; }
+FORCE_INLINE bool eqi128(i128 a, i128 b) { return a == b; }
+FORCE_INLINE bool equ8(u8 a, u8 b) { return a == b; }
+FORCE_INLINE bool equ16(u16 a, u16 b) { return a == b; }
+FORCE_INLINE bool equ32(u32 a, u32 b) { return a == b; }
+FORCE_INLINE bool equ64(u64 a, u64 b) { return a == b; }
+FORCE_INLINE bool equ128(u128 a, u128 b) { return a == b; }
 
 
 /* --- Not-equal --- */
 
-FORCE_INLINE int neqi8(i8 a, i8 b) { return a != b; }
-FORCE_INLINE int neqi16(i16 a, i16 b) { return a != b; }
-FORCE_INLINE int neqi32(i32 a, i32 b) { return a != b; }
-FORCE_INLINE int neqi64(i64 a, i64 b) { return a != b; }
-FORCE_INLINE int neqi128(i128 a, i128 b) { return a != b; }
-FORCE_INLINE int nequ8(u8 a, u8 b) { return a != b; }
-FORCE_INLINE int nequ16(u16 a, u16 b) { return a != b; }
-FORCE_INLINE int nequ32(u32 a, u32 b) { return a != b; }
-FORCE_INLINE int nequ64(u64 a, u64 b) { return a != b; }
-FORCE_INLINE int nequ128(u128 a, u128 b) { return a != b; }
+FORCE_INLINE bool neqi8(i8 a, i8 b) { return a != b; }
+FORCE_INLINE bool neqi16(i16 a, i16 b) { return a != b; }
+FORCE_INLINE bool neqi32(i32 a, i32 b) { return a != b; }
+FORCE_INLINE bool neqi64(i64 a, i64 b) { return a != b; }
+FORCE_INLINE bool neqi128(i128 a, i128 b) { return a != b; }
+FORCE_INLINE bool nequ8(u8 a, u8 b) { return a != b; }
+FORCE_INLINE bool nequ16(u16 a, u16 b) { return a != b; }
+FORCE_INLINE bool nequ32(u32 a, u32 b) { return a != b; }
+FORCE_INLINE bool nequ64(u64 a, u64 b) { return a != b; }
+FORCE_INLINE bool nequ128(u128 a, u128 b) { return a != b; }
 
 
 /* --- Less-than --- */
 
-FORCE_INLINE int lti8(i8 a, i8 b) { return a < b; }
-FORCE_INLINE int lti16(i16 a, i16 b) { return a < b; }
-FORCE_INLINE int lti32(i32 a, i32 b) { return a < b; }
-FORCE_INLINE int lti64(i64 a, i64 b) { return a < b; }
-FORCE_INLINE int lti128(i128 a, i128 b) { return a < b; }
-FORCE_INLINE int ltu8(u8 a, u8 b) { return a < b; }
-FORCE_INLINE int ltu16(u16 a, u16 b) { return a < b; }
-FORCE_INLINE int ltu32(u32 a, u32 b) { return a < b; }
-FORCE_INLINE int ltu64(u64 a, u64 b) { return a < b; }
-FORCE_INLINE int ltu128(u128 a, u128 b) { return a < b; }
+FORCE_INLINE bool lti8(i8 a, i8 b) { return a < b; }
+FORCE_INLINE bool lti16(i16 a, i16 b) { return a < b; }
+FORCE_INLINE bool lti32(i32 a, i32 b) { return a < b; }
+FORCE_INLINE bool lti64(i64 a, i64 b) { return a < b; }
+FORCE_INLINE bool lti128(i128 a, i128 b) { return a < b; }
+FORCE_INLINE bool ltu8(u8 a, u8 b) { return a < b; }
+FORCE_INLINE bool ltu16(u16 a, u16 b) { return a < b; }
+FORCE_INLINE bool ltu32(u32 a, u32 b) { return a < b; }
+FORCE_INLINE bool ltu64(u64 a, u64 b) { return a < b; }
+FORCE_INLINE bool ltu128(u128 a, u128 b) { return a < b; }
 
 
 /* --- Greater-than --- */
 
-FORCE_INLINE int gti8(i8 a, i8 b) { return a > b; }
-FORCE_INLINE int gti16(i16 a, i16 b) { return a > b; }
-FORCE_INLINE int gti32(i32 a, i32 b) { return a > b; }
-FORCE_INLINE int gti64(i64 a, i64 b) { return a > b; }
-FORCE_INLINE int gti128(i128 a, i128 b) { return a > b; }
-FORCE_INLINE int gtu8(u8 a, u8 b) { return a > b; }
-FORCE_INLINE int gtu16(u16 a, u16 b) { return a > b; }
-FORCE_INLINE int gtu32(u32 a, u32 b) { return a > b; }
-FORCE_INLINE int gtu64(u64 a, u64 b) { return a > b; }
-FORCE_INLINE int gtu128(u128 a, u128 b) { return a > b; }
+FORCE_INLINE bool gti8(i8 a, i8 b) { return a > b; }
+FORCE_INLINE bool gti16(i16 a, i16 b) { return a > b; }
+FORCE_INLINE bool gti32(i32 a, i32 b) { return a > b; }
+FORCE_INLINE bool gti64(i64 a, i64 b) { return a > b; }
+FORCE_INLINE bool gti128(i128 a, i128 b) { return a > b; }
+FORCE_INLINE bool gtu8(u8 a, u8 b) { return a > b; }
+FORCE_INLINE bool gtu16(u16 a, u16 b) { return a > b; }
+FORCE_INLINE bool gtu32(u32 a, u32 b) { return a > b; }
+FORCE_INLINE bool gtu64(u64 a, u64 b) { return a > b; }
+FORCE_INLINE bool gtu128(u128 a, u128 b) { return a > b; }
 
 
 /* --- Less-than-equal --- */
 
-FORCE_INLINE int lteqi8(i8 a, i8 b) { return a <= b; }
-FORCE_INLINE int lteqi16(i16 a, i16 b) { return a <= b; }
-FORCE_INLINE int lteqi32(i32 a, i32 b) { return a <= b; }
-FORCE_INLINE int lteqi64(i64 a, i64 b) { return a <= b; }
-FORCE_INLINE int lteqi128(i128 a, i128 b) { return a <= b; }
-FORCE_INLINE int ltequ8(u8 a, u8 b) { return a <= b; }
-FORCE_INLINE int ltequ16(u16 a, u16 b) { return a <= b; }
-FORCE_INLINE int ltequ32(u32 a, u32 b) { return a <= b; }
-FORCE_INLINE int ltequ64(u64 a, u64 b) { return a <= b; }
-FORCE_INLINE int ltequ128(u128 a, u128 b) { return a <= b; }
+FORCE_INLINE bool lteqi8(i8 a, i8 b) { return a <= b; }
+FORCE_INLINE bool lteqi16(i16 a, i16 b) { return a <= b; }
+FORCE_INLINE bool lteqi32(i32 a, i32 b) { return a <= b; }
+FORCE_INLINE bool lteqi64(i64 a, i64 b) { return a <= b; }
+FORCE_INLINE bool lteqi128(i128 a, i128 b) { return a <= b; }
+FORCE_INLINE bool ltequ8(u8 a, u8 b) { return a <= b; }
+FORCE_INLINE bool ltequ16(u16 a, u16 b) { return a <= b; }
+FORCE_INLINE bool ltequ32(u32 a, u32 b) { return a <= b; }
+FORCE_INLINE bool ltequ64(u64 a, u64 b) { return a <= b; }
+FORCE_INLINE bool ltequ128(u128 a, u128 b) { return a <= b; }
 
 
 /* --- Greater-than-equal --- */
 
-FORCE_INLINE int gteqi8(i8 a, i8 b) { return a >= b; }
-FORCE_INLINE int gteqi16(i16 a, i16 b) { return a >= b; }
-FORCE_INLINE int gteqi32(i32 a, i32 b) { return a >= b; }
-FORCE_INLINE int gteqi64(i64 a, i64 b) { return a >= b; }
-FORCE_INLINE int gteqi128(i128 a, i128 b) { return a >= b; }
-FORCE_INLINE int gtequ8(u8 a, u8 b) { return a >= b; }
-FORCE_INLINE int gtequ16(u16 a, u16 b) { return a >= b; }
-FORCE_INLINE int gtequ32(u32 a, u32 b) { return a >= b; }
-FORCE_INLINE int gtequ64(u64 a, u64 b) { return a >= b; }
-FORCE_INLINE int gtequ128(u128 a, u128 b) { return a >= b; }
+FORCE_INLINE bool gteqi8(i8 a, i8 b) { return a >= b; }
+FORCE_INLINE bool gteqi16(i16 a, i16 b) { return a >= b; }
+FORCE_INLINE bool gteqi32(i32 a, i32 b) { return a >= b; }
+FORCE_INLINE bool gteqi64(i64 a, i64 b) { return a >= b; }
+FORCE_INLINE bool gteqi128(i128 a, i128 b) { return a >= b; }
+FORCE_INLINE bool gtequ8(u8 a, u8 b) { return a >= b; }
+FORCE_INLINE bool gtequ16(u16 a, u16 b) { return a >= b; }
+FORCE_INLINE bool gtequ32(u32 a, u32 b) { return a >= b; }
+FORCE_INLINE bool gtequ64(u64 a, u64 b) { return a >= b; }
+FORCE_INLINE bool gtequ128(u128 a, u128 b) { return a >= b; }
 
 
 /* --- Float Addition --- */
@@ -720,27 +721,27 @@ divf32(f32 lhs, f32 rhs)
 
 
 /* --- Float Equal --- */
-FORCE_INLINE f32 eqf32(f32 a, f32 b) { return a == b; }
-FORCE_INLINE f64 eqf64(f64 a, f64 b) { return a == b; }
+FORCE_INLINE bool eqf32(f32 a, f32 b) { return a == b; }
+FORCE_INLINE bool eqf64(f64 a, f64 b) { return a == b; }
 
 /* --- Float Not-equal --- */
-FORCE_INLINE f32 neqf32(f32 a, f32 b) { return a != b; }
-FORCE_INLINE f64 neqf64(f64 a, f64 b) { return a != b; }
+FORCE_INLINE bool neqf32(f32 a, f32 b) { return a != b; }
+FORCE_INLINE bool neqf64(f64 a, f64 b) { return a != b; }
 
 /* --- Float Less-than --- */
-FORCE_INLINE f32 ltf32(f32 a, f32 b) { return a < b; }
-FORCE_INLINE f64 ltf64(f64 a, f64 b) { return a < b; }
+FORCE_INLINE bool ltf32(f32 a, f32 b) { return a < b; }
+FORCE_INLINE bool ltf64(f64 a, f64 b) { return a < b; }
 
 /* --- Float Greater-than --- */
-FORCE_INLINE f32 gtf32(f32 a, f32 b) { return a > b; }
-FORCE_INLINE f64 gtf64(f64 a, f64 b) { return a > b; }
+FORCE_INLINE bool gtf32(f32 a, f32 b) { return a > b; }
+FORCE_INLINE bool gtf64(f64 a, f64 b) { return a > b; }
 
 /* --- Float Less-than-equal --- */
-FORCE_INLINE f32 lteqf32(f32 a, f32 b) { return a <= b; }
-FORCE_INLINE f64 lteqf64(f64 a, f64 b) { return a <= b; }
+FORCE_INLINE bool lteqf32(f32 a, f32 b) { return a <= b; }
+FORCE_INLINE bool lteqf64(f64 a, f64 b) { return a <= b; }
 
 /* --- Float Greater-than-equal --- */
-FORCE_INLINE f32 gteqf32(f32 a, f32 b) { return a >= b; }
-FORCE_INLINE f64 gteqf64(f64 a, f64 b) { return a >= b; }
+FORCE_INLINE bool gteqf32(f32 a, f32 b) { return a >= b; }
+FORCE_INLINE bool gteqf64(f64 a, f64 b) { return a >= b; }
 
 #endif
