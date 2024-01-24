@@ -18,9 +18,9 @@
 #define PGW(_gw) printf("{ addr: %p, remain: %zu, size: %zu}\n", _gw.addr, _gw.remain, _gw.size)
 
 
-int hold = 0;
-int holdc = 0;
-int fd = 0;
+static int hold = 0;
+static int holdc = 0;
+static int fd = 0;
 
 static Strimap *mpident = {0};
 
@@ -84,7 +84,7 @@ peekc(void)
 	static char buf[BUFSZ];
 	static char c;
 	static int hd = -1;
-	ssize_t sz;
+	static ssize_t sz = BUFSZ;
 
 	/* return the same char until forward() is not called */
 	if (holdc) {
@@ -97,7 +97,7 @@ peekc(void)
 	}
 	holdc = 1;
 
-	if (hd < 0 || hd == BUFSZ) {
+	if (hd < 0 || hd == sz) {
 		hd = 0;
 		sz = read(fd, buf, sizeof(buf));
 		if (sz < 0) {
@@ -105,8 +105,8 @@ peekc(void)
 			exit(1);
 		}
 		if (sz == 0) {
-			/* fprintf(stderr, "peekc(): returning EOF\n"); */
-			return EOF;
+			c = EOF;
+			return c;
 		}
 	}
 	c = buf[hd];
