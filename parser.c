@@ -84,6 +84,7 @@ do {                                                                            
 #define ISBINOP(_op) (_op >= MUL && _op <= LNOT)
 #define TOKTOOP(_t) ((_t) - MUL)
 #define TYPESTR(_type) (_type == -1 ? "?" : (char*) ftptr(&ftident, _type))
+#define identstr(_ident) ((char*) ftptr(&ftident, _ident))
 
 extern FatArena ftident;
 extern FatArena ftimmed;
@@ -147,16 +148,17 @@ const char *uopstrs[UOP_NUM] = {
 	[UOP_SUB]    = "SUB",
 	[UOP_LNOT]   = "LNOT",
 	[UOP_BNOT]   = "BNOT",
-	[UOP_BXOR]   = "BXOR",
+	[UOP_DEREF]   = "DEREF",
 	[UOP_AT]     = "AT",
 	[UOP_SIZEOF] = "SIZEOF",
 };
 
 void printexpr(FILE *fd, intptr expr);
 static int parse_expression(const ETok *t, const ETok *eoe, intptr *expr);
-static int parse_fun_stmts(const ETok *t, intptr *stmt);
+static int parse_stmt_block(const ETok *t, intptr *stmt);
 static int parse_call(const ETok *t, intptr ident, intptr *d);
 static int parse_otherop(const ETok *t, const ETok *eoe, intptr *expr);
+static int parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt);
 
 void
 printstmt(FILE *fd, intptr stmt)
@@ -193,11 +195,12 @@ printstmt(FILE *fd, intptr stmt)
 		char *type = decl->type ==  -1 ? "?" : (char*) ftptr(&ftident, decl->type);
 		fprintf(fd, "%s(%s, ", stmtstrs[*ptr], (char*) ftptr(&ftident, decl->ident));
 		printexpr(fd, decl->expr);
+		fprintf(fd, ") : ");
 		int ptrlvl = decl->ptrlvl;
 		while (ptrlvl-- > 0) {
 			fprintf(fd, "^");
 		}
-		fprintf(fd, ") : %s", type);
+		fprintf(fd, "%s", type);
 		break;
 	}
 	case SFUN: {
@@ -250,7 +253,7 @@ printstmt(FILE *fd, intptr stmt)
 		printstmt(fd, _if->ifstmt);
 
 		if (_if->elsestmt > 0) {
-			fprintf(fd, ", ");
+			fprintf(fd, ", ELSE ");
 			printstmt(fd, _if->elsestmt);
 		}
 		fprintf(fd, ")");
@@ -590,29 +593,311 @@ parse_for_stmt(const ETok *t, intptr *stmt)
 }
 
 static int
-parse_fun_stmt(const ETok *t, intptr *stmt)
+parse_stmt_return(const ETok *t, const ETok *eoe, intptr *stmt)
 {
-	const ETok eoe[] = {SEMICOLON, RBRACES, UNDEFINED};
+	int i = 0;
+	int res = -1;
+
+	intptr saddr = ftalloc(&ftast, sizeof(SReturn));
+	*stmt = saddr;
+	SReturn *ret = (SReturn*) ftptr(&ftast, saddr);
+	ret->kind = SRETURN;
+
+	res = parse_expression(t + i, eoe, &ret->expr);
+	if (res < 0) {
+		ERR("parse expression in a function.");
+		return -1;
+	}
+	i += res;
+
+	ISTOK(t[i], eoe, res);
+	if (!res) {
+		ERR("The return doesn't finish with the correct token.");
+		ERR("Tok(%d): %s, Eoe:", t[i], tokenstrs[t[i]]);
+		return -1;
+	}
+	i++;
+
+	return i;
+}
+
+static int
+parse_stmt_assign(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident)
+{
+	int i = 0;
+	int res = -1;
+
+	intptr aaddr = ftalloc(&ftast, sizeof(SAssign));
+	*stmt = aaddr;
+
+	SAssign *assign = (SAssign*) ftptr(&ftast, aaddr);
+	assign->kind = SASSIGN;
+	assign->ident = ident;
+
+	res = parse_expression(t + i, eoe, &assign->expr);
+	if (res < 0) {
+		ERR("parse expression in a function.");
+		return -1;
+	}
+	i += res;
+
+	ISTOK(t[i], eoe, res);
+	if (!res) {
+		ERR("The assign doesn't finish with the correct token.");
+		ERR("Tok(%d): %s, Eoe:", t[i], tokenstrs[t[i]]);
+		return -1;
+	}
+
+	// consume `;`
+	i++;
+	return i;
+}
+
+static int
+parse_stmt_call(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident)
+{
+	int i = 0;
+	int res = -1;
+	intptr caddr = -1;
+
+	res = parse_call(t + i, ident, &caddr);
+	if (res < 0) {
+		ERR("Error when paring a call statement in a function.");
+		return -1;
+	}
+	i += res;
+
+	*stmt = caddr;
+	SCall *call = (SCall*) ftptr(&ftast, caddr);
+	call->kind = SCALL;
+
+	ISTOK(t[i], eoe, res);
+	if (!res) {
+		ERR("The call declaration doesn't finish with the correct token.");
+		ERR("Tok(%d): %s, Eoe:", t[i], tokenstrs[t[i]]);
+		return -1;
+	}
+
+	// consume
+	i++;
+	return i;
+}
+
+static int
+parse_stmt_decl(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident)
+{
+	int i = 0;
+	int res = -1;
+	int cst = -1;
+	int type = -1;
+	int ptrlvl = 0;
+
+	if (t[i] != COLON) {
+		ERR("Unexpected token <%s> at the beginning of a statement.\n|> Expects `:`", tokenstrs[t[i]]);
+		return -1;
+	}
+	i++;
+
+	PTRLVL(t, i, type, ptrlvl);
+	if (ptrlvl == 0 && t[i] == IDENTIFIER) {
+		i++;
+		type = t[i];
+		i++;
+	}
+
+	if (t[i] == COLON) {
+		i++;
+		cst = 1;
+	} else if (t[i] == ASSIGN) {
+		i++;
+		cst = 0;
+	} else {
+		ERR("Unexpected token <%s> in a declaration statement.", tokenstrs[t[i]]);
+		return -1;
+	}
+
+	intptr daddr = ftalloc(&ftast, sizeof(SDecl));
+	*stmt = daddr;
+
+	SDecl *decl = (SDecl*) ftptr(&ftast, daddr);
+	decl->kind = SDECL;
+	decl->cst = cst;
+	decl->type = type;
+	decl->ident = ident;
+	decl->ptrlvl = ptrlvl;
+
+	res = parse_expression(t + i, eoe, &decl->expr);
+	if (res < 0) {
+		ERR("parsing expression in a declaration statement");
+		return -1;
+	}
+	i += res;
+
+	// consume `;`
+	i++;
+	return i;
+}
+
+
+static int
+parse_stmt_if(const ETok *t, intptr *stmt)
+{
+	const ETok eoe[] = {LBRACES, UNDEFINED};
+	int i = 0;
+	int res = -1;
+
+	intptr iaddr = ftalloc(&ftast, sizeof(SIf));
+	*stmt = iaddr;
+
+	SIf *_if = (SIf*) ftptr(&ftast, iaddr);
+	_if->kind = SIF;
+
+	res = parse_expression(t + i, eoe, &_if->cond);
+	if (res < 0) {
+		ERR("parsing expression in a declaration statement");
+		return -1;
+	}
+	i += res;
+
+	intptr ifstmt = -1;
+	intptr elsestmt = -1;
+	res = parse_fun_stmt(t + i, eoe, &ifstmt);
+	if (res < 0) {
+		ERR("parsing statements in a if statement");
+		return -1;
+	}
+	i += res;
+
+	const ETok eoeelse[] = {SEMICOLON, UNDEFINED};
+	if (t[i] == ELSE) {
+		i++;
+		res = parse_fun_stmt(t + i, eoeelse, &elsestmt);
+		if (res < 0) {
+			ERR("Error when parsing the else stmt.");
+			return -1;
+		}
+		i += res;
+	}
+
+	_if->ifstmt = ifstmt;
+	_if->elsestmt = elsestmt;
+
+	return i;
+}
+
+static int
+parse_stmt_for(const ETok *t, intptr *stmt)
+{
+	const ETok eoe[] = {SEMICOLON, UNDEFINED};
+	const ETok eoe2[] = {SEMICOLON, LBRACES, UNDEFINED};
+	int i = 0;
+	int res = -1;
+	intptr stmt1, stmt2, expr, forstmt = -1;
+
+	res = parse_fun_stmt(t + i, eoe, &stmt1);
+	if (res < 0) {
+		ERR("Error when parsing the first statement of a forloop. Exepects: `for` `stmt`; `expr` `;` `stmt` `{` stmt `}`");
+		return -1;
+	}
+	i += res;
+
+	res = parse_expression(t + i, eoe, &expr);
+	if (res < 0) {
+		ERR("Error when parsing the expression of a forloop. Exepects: `for` `stmt`; `expr` `;` `stmt` `{` stmt `}`");
+		return -1;
+	}
+	i += res;
+
+	// Consume `;`
+	if (t[i] != SEMICOLON) {
+		ERR("Error when parsing the expression of a forloop. Exepects: `for` `stmt`; `expr` `;` `stmt` `{` stmt `}`");
+		return -1;
+	}
+	i++;
+
+	res = parse_fun_stmt(t + i, eoe2, &stmt2);
+	if (res < 0) {
+		ERR("Error when parsing the second statement of a forloop. Exepects: `for` `stmt`; `expr` `;` `stmt` `{` stmt `}`");
+		return -1;
+	}
+	i += res;
+
+	if (t[i-1] == LBRACES) {
+		// cancel the consume
+		i--;
+	}
+
+	res = parse_fun_stmt(t + i, eoe, &forstmt);
+	if (res < 0) {
+		ERR("Error when parsing statements in a forloop.");
+		return -1;
+	}
+	i += res;
+
+	intptr faddr = ftalloc(&ftast, sizeof(SFor));
+	*stmt = faddr;
+
+	SFor *_for = (SFor*) ftptr(&ftast, faddr);
+	_for->kind = SFOR;
+	_for->forstmt = forstmt;
+	_for->stmt1 = stmt1;
+	_for->stmt2 = stmt2;
+	_for->expr = expr;
+
+	return i;
+}
+
+static int
+parse_stmt_block(const ETok *t, intptr *stmt)
+{
+	const ETok eoe[] = {SEMICOLON, UNDEFINED};
+	int i = 0;
+	int res = -1;
+	intptr retaddr;
+	intptr *saveaddr = &retaddr;
+
+	if (t[i] == RBRACES) {
+		return -1;
+	}
+
+	for (;;) {
+		res = parse_fun_stmt(t + i, eoe, saveaddr);
+		if (res < 0) {
+			ERR("parsing fun statements");
+			return -1;
+		}
+		i += res;
+
+		if (t[i] == RBRACES) {
+			break;
+		}
+
+		intptr addr = ftalloc(&ftast, sizeof(SSeq));
+		intptr cpy = *saveaddr;
+		*saveaddr = addr;
+		SSeq *seq = (SSeq*) ftptr(&ftast, addr);
+		seq->kind = SSEQ;
+		seq->stmt = cpy;
+		seq->nxt = -1;
+		saveaddr = &seq->nxt;
+	}
+	*stmt = retaddr;
+
+	// consume `}`
+	i++;
+	return i;
+}
+
+static int
+parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
+{
 	int i = 0;
 	int res = -1;
 
 	switch (t[i]) {
 	case RETURN: {
 		i++;
-		intptr saddr = ftalloc(&ftast, sizeof(SReturn));
-		*stmt = saddr;
-
-		SReturn *ret = (SReturn*) ftptr(&ftast, saddr);
-		ret->kind = SRETURN;
-
-		res = parse_expression(t + i, eoe, &ret->expr);
-		if (res < 0) {
-			ERR("parse expression in a function.");
-			return -1;
-		}
-		i += res;
-
-		return i;
+		res = parse_stmt_return(t + i, eoe, stmt);
 		break;
 	}
 	case IDENTIFIER:
@@ -622,283 +907,51 @@ parse_fun_stmt(const ETok *t, intptr *stmt)
 
 		if (t[i] >= ASSIGN && t[i] <= MOD_ASSIGN) {
 			i++;
-
-			intptr aaddr = ftalloc(&ftast, sizeof(SAssign));
-			*stmt = aaddr;
-
-			SAssign *assign = (SAssign*) ftptr(&ftast, aaddr);
-			assign->kind = SASSIGN;
-			assign->ident = ident;
-
-			res = parse_expression(t + i, eoe, &assign->expr);
-			if (res < 0) {
-				ERR("parse expression in a function.");
-				return -1;
-			}
-			i += res;
-
-			return i;
+			res = parse_stmt_assign(t + i, eoe, stmt, ident);
+			break;
 		}
 
 		if (t[i] == LPAREN) {
-			intptr caddr = -1;
-			res = parse_call(t + i, ident, &caddr);
-			if (res < 0) {
-				ERR("Error when paring a call statement in a function.");
-				return -1;
-			}
-			i += res;
-
-			*stmt = caddr;
-			SCall *call = (SCall*) ftptr(&ftast, caddr);
-			call->kind = SCALL;
-			return i;
-		}
-
-		int cst = -1;
-		int type = -1;
-		int ptrlvl = 0;
-
-		if (t[i] != COLON) {
-			ERR("Unexpected token <%s> at the beginning of a statement.\n|> Expects `:`", tokenstrs[t[i]]);
-			return -1;
-		}
-		i++;
-
-		PTRLVL(t, i, type, ptrlvl);
-		if (ptrlvl == 0 && t[i] == IDENTIFIER) {
 			i++;
-			type = t[i];
-			i++;
+			res = parse_stmt_call(t + i, eoe, stmt, ident);
+			break;
 		}
 
-		if (t[i] == COLON) {
-			i++;
-			cst = 1;
-		} else if (t[i] == ASSIGN) {
-			i++;
-			cst = 0;
-		} else {
-			ERR("Unexpected token <%s> in a declaration statement.", tokenstrs[t[i]]);
-			return -1;
-		}
-
-		intptr daddr = ftalloc(&ftast, sizeof(SDecl));
-		*stmt = daddr;
-
-		SDecl *decl = (SDecl*) ftptr(&ftast, daddr);
-		decl->kind = SDECL;
-		decl->cst = cst;
-		decl->type = type;
-		decl->ident = ident;
-		decl->ptrlvl = ptrlvl;
-
-		res = parse_expression(t + i, eoe, &decl->expr);
-		if (res < 0) {
-			ERR("parsing expression in a declaration statement");
-			return -1;
-		}
-		i += res;
-
-		return i;
+		res = parse_stmt_decl(t + i, eoe, stmt, ident);
 		break;
 	case IF: {
-		const ETok eoe[] = {LBRACES, UNDEFINED};
 		i++;
-		intptr iaddr = ftalloc(&ftast, sizeof(SIf));
-		*stmt = iaddr;
-
-		SIf *_if = (SIf*) ftptr(&ftast, iaddr);
-		_if->kind = SIF;
-
-		res = parse_expression(t + i, eoe, &_if->cond);
-		if (res < 0) {
-			ERR("parsing expression in a declaration statement");
-			return -1;
-		}
-		i += res;
-
-		intptr ifstmt = -1;
-		intptr elsestmt = -1;
-		res = parse_fun_stmts(t + i, &ifstmt);
-		if (res < 0) {
-			ERR("parsing statements in a if statement");
-			return -1;
-		}
-		i += res;
-
-		if (t[i] != RBRACES) {
-			ERR("Unexpected token <%s>, expects a `}`", tokenstrs[t[i]]);
-		}
-		// Consume the `}` of the if
-		i++;
-
-		if (t[i] == ELSE) {
-			i++;
-			res = parse_fun_stmts(t + i, &elsestmt);
-			if (res < 0) {
-				ERR("parsing statements in a else statement");
-				return -1;
-			}
-			i += res;
-
-			if (t[i] != RBRACES) {
-				ERR("Unexpected token <%s>, expects a `}`", tokenstrs[t[i]]);
-			}
-			// Consume the `}` of the else
-			i++;
-		}
-
-		_if->ifstmt = ifstmt;
-		_if->elsestmt = elsestmt;
-
-		return i;
+		res = parse_stmt_if(t + i, stmt);
 		break;
 	}
 	case FOR: {
 		i++;
-		const ETok eoe[] = {SEMICOLON, UNDEFINED};
-		intptr stmt1, stmt2, expr, forstmt;
-		res = parse_for_stmt(t + i, &stmt1);
-		if (res < 0) {
-			ERR("Error when parsing the first statement of a forloop. Exepects: `for` `stmt`; `expr` `;` `stmt` `{` stmt `}`");
-			return -1;
-		}
-		i += res;
-
-		// Consume `;`
-		if (t[i] != SEMICOLON) {
-			ERR("Error when parsing the expression of a forloop. Exepects: `for` `stmt`; `expr` `;` `stmt` `{` stmt `}`");
-			return -1;
-		}
+		res = parse_stmt_for(t + i, stmt);
+		break;
+	}
+	case LBRACES: {
 		i++;
-
-		res = parse_expression(t + i, eoe, &expr);
-		if (res < 0) {
-			ERR("Error when parsing the expression of a forloop. Exepects: `for` `stmt`; `expr` `;` `stmt` `{` stmt `}`");
-			return -1;
-		}
-		i += res;
-
-		// Consume `;`
-		if (t[i] != SEMICOLON) {
-			ERR("Error when parsing the expression of a forloop. Exepects: `for` `stmt`; `expr` `;` `stmt` `{` stmt `}`");
-			return -1;
-		}
-		i++;
-
-		res = parse_for_stmt(t + i, &stmt2);
-		if (res < 0) {
-			ERR("Error when parsing the second statement of a forloop. Exepects: `for` `stmt`; `expr` `;` `stmt` `{` stmt `}`");
-			return -1;
-		}
-		i += res;
-
-		res = parse_fun_stmts(t + i, &forstmt);
-		if (res < 0) {
-			ERR("Error when parsing statements in a forloop.");
-			return -1;
-		}
-		i += res;
-		// Consume the `}` of the forloop
-		i++;
-
-		intptr faddr = ftalloc(&ftast, sizeof(SFor));
-		*stmt = faddr;
-
-		SFor *_for = (SFor*) ftptr(&ftast, faddr);
-		_for->kind = SFOR;
-		_for->forstmt = forstmt;
-		_for->stmt1 = stmt1;
-		_for->stmt2 = stmt2;
-		_for->expr = expr;
-
-		return i;
+		res = parse_stmt_block(t + i, stmt);
+		break;
 	}
 	default:
 		ERR("Unexepcted token <%s> in at the beginning of a statement.", tokenstrs[t[i]]);
 	}
 
-	ERR("Unreachable when parsing statement");
-	return -1;
-}
-
-static int
-parse_fun_stmts(const ETok *t, intptr *stmt)
-{
-	int i = 0;
-	int res = -1;
-
-	if (t[i] != LBRACES) {
-		ERR("Unexpected token <%s>, `{` is expected for a group of statement.", tokenstrs[t[i]]);
+	if (res < 0) {
+		ERR("Error in parse_fun_stmt.");
 		return -1;
 	}
-	i++;
 
-	intptr retaddr;
-	intptr *saveaddr = &retaddr;
-
-	while (t[i] != RBRACES) {
-		res = parse_fun_stmt(t + i, saveaddr);
-		if (res < 0) {
-			ERR("parsing fun statements");
-			return -1;
-		}
-		i += res;
-
-		switch (t[i]) {
-		case SEMICOLON:
-			i++;
-			if (t[i] == RBRACES) {
-				break;
-			}
-
-			intptr addr = ftalloc(&ftast, sizeof(SSeq));
-			intptr cpy = *saveaddr;
-			*saveaddr = addr;
-			SSeq *seq = (SSeq*) ftptr(&ftast, addr);
-			seq->kind = SSEQ;
-			seq->stmt = cpy;
-			seq->nxt = -1;
-			saveaddr = &seq->nxt;
-			break;
-
-		case RBRACES:
-			// Case right after a block
-			if (t[i - 1] == RBRACES) {
-				break;
-			}
-
-			ERR("Unexpected token <%s>, expects `;`.", tokenstrs[t[i]]);
-			return -1;
-			break;
-
-		default:
-			// Case right after a block
-			if (t[i - 1] == RBRACES) {
-				intptr addr = ftalloc(&ftast, sizeof(SSeq));
-				intptr cpy = *saveaddr;
-				*saveaddr = addr;
-				SSeq *seq = (SSeq*) ftptr(&ftast, addr);
-				seq->kind = SSEQ;
-				seq->stmt = cpy;
-				seq->nxt = -1;
-				saveaddr = &seq->nxt;
-				break;
-			}
-
-			ERR("Unexpected token <%s>, expects `}` or `;`.", tokenstrs[t[i]]);
-			return -1;
-		}
-	}
-
-	*stmt = retaddr;
+	i += res;
 	return i;
 }
+
 
 static int
 parse_toplevel_fun(const ETok *t, intptr ident, intptr *stmt)
 {
+	const ETok eoe[] = {SEMICOLON, UNDEFINED};
 	int i = 0;
 	int res = -1;
 
@@ -909,6 +962,7 @@ parse_toplevel_fun(const ETok *t, intptr ident, intptr *stmt)
 	fun->ident = ident;
 	fun->kind = SFUN;
 	fun->type = -1;
+	fun->ptrlvl = 0;
 	fun->stmt = -1;
 
 	res = parse_param(t + i, fun);
@@ -924,7 +978,7 @@ parse_toplevel_fun(const ETok *t, intptr ident, intptr *stmt)
 		i++;
 	}
 
-	res = parse_fun_stmts(t + i, &fun->stmt);
+	res = parse_fun_stmt(t + i, eoe, &fun->stmt);
 	if (res < 0) {
 		ERR("parsing fun statements");
 		return -1;
@@ -1005,22 +1059,19 @@ parse_toplevel_struct(const ETok *t, intptr ident, intptr *stmt)
 			break;
 		}
 
-		BURNNEWLINE(t, i);
-
 		if (t[i] != SEMICOLON) {
 			ERR("Expects a separator <SEMICOLON>");
 			return -1;
 		}
 		i++;
 
-		BURNNEWLINE(t, i);
-
 		if (t[i] == RBRACES) {
 			break;
 		}
 	}
 
-	return i;
+	// consume `}`
+	return i + 1;
 }
 
 static int
@@ -1039,14 +1090,6 @@ parse_call(const ETok *t, const intptr addr, intptr *d)
 	const ETok eoe[3] = {COMMA, RPAREN, UNDEFINED};
 	int i = 0;
 	int res = -1;
-
-	// Case it's only an identifier
-	if (t[i] != LPAREN) {
-		return 0;
-	}
-
-	// Case it's a function call
-	i++;
 
 	// Alloc and save a function expression
 	intptr caddr = ftalloc(&ftast, sizeof(ECall));
@@ -1207,7 +1250,7 @@ parse_direct(const ETok *t, intptr *expr)
 	}
 
 	default:
-		fprintf(stderr, "Unexpected token <%s>", tokenstrs[t[i]]);
+		ERR("Unexpected token <%s>", tokenstrs[t[i]]);
 		return -1;
 	}
 
@@ -1275,6 +1318,7 @@ parse_aftercall(const ETok *t, const ETok *eoe, intptr cexpr, intptr *expr)
 		return i;
 	}
 	case LPAREN: {
+		i++;
 		intptr call = -1;
 		res = parse_call(t + i, cexpr, &call);
 		if (res < 0) {
@@ -1395,6 +1439,7 @@ parse_otherop(const ETok *t, const ETok *eoe, intptr *expr)
 		return i;
 	}
 	case LPAREN: {
+		i++;
 		intptr call = -1;
 		res = parse_call(t + i, addr, &call);
 		if (res < 0) {
@@ -1451,6 +1496,8 @@ parse_unop(const ETok *t, const ETok *eoe, intptr *expr)
 		EUnop *unop = (EUnop*) ftptr(&ftast, uaddr);
 		unop->kind = EUNOP;
 		unop->op = add;
+		unop->type = -1;
+		unop->ptrlvl = 0;
 
 		// Parse the following expression
 		intptr nxt = 0;
@@ -1484,6 +1531,8 @@ parse_unop(const ETok *t, const ETok *eoe, intptr *expr)
 		EParen *paren = (EParen*) ftptr(&ftast, paddr);
 		paren->kind = EPAREN;
 		paren->expr = in;
+		paren->type = -1;
+		paren->ptrlvl = 0;
 
 		// Consume RPAREN
 		i++;
@@ -1534,6 +1583,8 @@ parse_binop(const ETok *t, const ETok *eoe, intptr *expr, int lvl)
 	intptr baddr = ftalloc(&ftast, sizeof(EBinop));
 	EBinop *binop = (EBinop*) ftptr(&ftast, baddr);
 	binop->kind = EBINOP;
+	binop->ptrlvl = 0;
+	binop->type = -1;
 	binop->op = TOKTOOP(t[i]);
 
 	// Save in the return variable
@@ -1587,8 +1638,8 @@ parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
 	int ptrlvl = 0;
 
 	if (t[i] != COLON) {
-		ERR("Declaration: <IDENTIFIER> : [<IDENTIFIER>] : EXPR");
-		return 0;
+		ERR("Declaration: <IDENTIFIER> : [<IDENTIFIER>] : EXPR, but found <%s>", tokenstrs[t[i]]);
+		return -1;
 	}
 	i++;
 
@@ -1604,8 +1655,8 @@ parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
 	} else if (t[i] == ASSIGN) {
 		cst = 0;
 	} else {
-		ERR("Declaration: <IDENTIFIER> : [<IDENTIFIER>] : EXPR");
-		return 0;
+		ERR("Declaration: <IDENTIFIER> : [<IDENTIFIER>] : EXPR, but found <%s>", tokenstrs[t[i]]);
+		return -1;
 	}
 	i++;
 
@@ -1662,10 +1713,15 @@ parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
 		decl->cst = cst;
 		decl->type = type;
 		decl->ptrlvl = ptrlvl;
-	}
 
-	// consume end of statement
-	i++;
+		if (t[i] != SEMICOLON) {
+			ERR("A top level declaration finish by a `;`.");
+			return -1;
+		}
+		// consume `;`
+		i++;
+
+	}
 
 	return i;
 }
@@ -1723,6 +1779,7 @@ parse_toplevel(const ETok *t, intptr *stmt)
 	}
 
 	if (res < 0) {
+		ERR("Toplevel error.");
 		return -1;
 	}
 	i += res;

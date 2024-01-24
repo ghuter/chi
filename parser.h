@@ -26,6 +26,7 @@ typedef enum {
 	SFOR,
 	SCALL,
 	SIMPORT,
+	SBLOCK,
 	NSTATEMENT,
 } EStmt;
 
@@ -45,6 +46,11 @@ typedef struct {
 	intptr type;
 	int ptrlvl;
 } SMember;
+
+typedef struct {
+	EStmt kind;
+	intptr stmt;
+} SBlock;
 
 typedef struct {
 	EStmt kind;
@@ -154,7 +160,7 @@ typedef enum {
 	UOP_SUB,
 	UOP_LNOT,
 	UOP_BNOT,
-	UOP_BXOR,
+	UOP_DEREF,
 	UOP_AT,
 	UOP_SIZEOF,
 	UOP_NUM,
