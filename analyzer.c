@@ -220,12 +220,6 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 	},
 };
 
-typedef struct SymHierarchy SymHierarchy;
-struct SymHierarchy {
-	Symbols *top;
-	SymHierarchy *others;
-};
-
 void
 printsymbols(Symbols *syms)
 {
@@ -443,7 +437,7 @@ computeconstype(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo)
 			return 0;
 		}
 
-		 if (!computeconstype(binop->right, &type2, &ptrlvl2, typeinfo)) {
+		if (!computeconstype(binop->right, &type2, &ptrlvl2, typeinfo)) {
 			ERR("Error when computing the type of a const declaration binop.");
 			return 0;
 		}
@@ -466,8 +460,8 @@ computeconstype(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo)
 		case UOP_LNOT:
 		//fallthrough
 		case UOP_BNOT:
-		//fallthrough
-		case UOP_BXOR: {
+			//fallthrough
+		{
 			if (!computeconstype(unop->expr, &unop->type, &unop->ptrlvl, typeinfo)) {
 				ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
 				return 0;
@@ -482,6 +476,9 @@ computeconstype(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo)
 			*ptrlvl = unop->ptrlvl;
 			return 1;
 		}
+		case UOP_DEREF:
+			ERR("Unexpected op <%s> at the toplevel.", uopstrs[unop->op]);
+			return 0;
 		case UOP_AT:
 			if (!computeconstype(unop->expr, &unop->type, &unop->ptrlvl, typeinfo)) {
 				ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
@@ -663,9 +660,7 @@ analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 		//fallthrough
 		case UOP_LNOT:
 		//fallthrough
-		case UOP_BNOT:
-		//fallthrough
-		case UOP_BXOR: {
+		case UOP_BNOT: {
 			if (!analyzefunexpr(unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
 				ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
 				return 0;
@@ -680,6 +675,21 @@ analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 			*ptrlvl = unop->ptrlvl;
 			return 1;
 		}
+		case UOP_DEREF:
+			if (!analyzefunexpr(unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
+				ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
+				return 0;
+			}
+
+			if (unop->ptrlvl < 1) {
+				ERR("Trying to deref a non ptr.");
+				return 0;
+			}
+
+			*type = unop->type;
+			*ptrlvl = (--unop->ptrlvl);
+
+			return 1;
 		case UOP_AT:
 			if (!analyzefunexpr(unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
 				ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
@@ -809,9 +819,6 @@ analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 
 		*type = sym->type;
 		*ptrlvl = sym->ptrlvl;
-
-
-
 		return 1;
 	}
 
@@ -829,22 +836,27 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 	UnknownStmt *unknown = (UnknownStmt*) ftptr(&ftast, stmt);
 	switch (*unknown) {
 	case SSEQ: {
+		TODO("SSEQ");
+
 		SSeq* seq = (SSeq*) unknown;
 
+		ERR("seq->stmt: %d", seq->stmt);
 		if (!analyzefunstmt(fun, nsym, block, seq->stmt)) {
 			ERR("Error when analyzing a seq in a function.");
 			return 0;
 		}
 
+		ERR("seq->next: %d", seq->nxt);
 		if (!analyzefunstmt(fun, nsym, block, seq->nxt)) {
 			ERR("Error when analyzing a seq in a function.");
 			return 0;
 		}
 
-		TODO("SSEQ");
 		return 1;
 	}
 	case SDECL: {
+		TODO("SDECL");
+
 		intptr type;
 		int ptrlvl;
 
@@ -868,10 +880,10 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 		}
 		*nsym += 1;
 
-		TODO("SDECL");
 		return 1;
 	}
 	case SIF: {
+		TODO("IF");
 		intptr type;
 		int ptrlvl;
 
@@ -888,15 +900,14 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 		}
 
 		newnsym = *nsym;
-		if (!analyzefunstmt(fun, &newnsym, newnsym, _if->elsestmt)) {
+		if (_if->elsestmt != -1 && !analyzefunstmt(fun, &newnsym, newnsym, _if->elsestmt)) {
 			ERR("Error when analyzing the else stmt of a if.");
 			return 0;
 		}
-
-		TODO("IF");
-		return 0;
+		return 1;
 	}
 	case SRETURN: {
+		TODO("SRETURN");
 		SReturn *ret = (SReturn*) unknown;
 		intptr type = -1;
 		int ptrlvl = -1;
@@ -910,10 +921,13 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 			ERR("Error the return expression <%s: ptrlvl %d> isn't the same as the function return type <%s: ptrlvl %d>.", identstr(type), ptrlvl, identstr(fun->type), fun->ptrlvl);
 			return 0;
 		}
+		TODO("OK ret");
 
 		return 1;
 	}
 	case SFOR: {
+		TODO("SFOR");
+
 		intptr type;
 		int ptrlvl;
 
@@ -942,11 +956,11 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 			ERR("Error when analyzing the body stmt of a for.");
 			return 0;
 		}
-
-		TODO("SFOR");
 		return 1;
 	}
 	case SCALL: {
+		TODO("SCALL");
+
 		SCall *call = (SCall*) unknown;
 
 		int idx = searchtopdcl(&funsym, call->ident);
@@ -979,11 +993,10 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 				return 0;
 			}
 		}
-
-		TODO("OK for SCALL");
 		return 1;
 	}
 	case SASSIGN: {
+		TODO("SASSIGN");
 		SAssign *a = (SAssign*) unknown;
 
 		SymInfo *sym = searchsyminfo(*nsym, a->ident);
@@ -1003,7 +1016,6 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 			return 0;
 		}
 
-		TODO("SASSIGN");
 		return 1;
 	}
 	default:

@@ -186,6 +186,7 @@ main(int argc, char *argv[])
 	Symbol *symf = (Symbol*) ftptr(&ftsym, funsym.array);
 	for (int i = 0; i < funsym.nsym; i++) {
 		SFun* fun = (SFun*) ftptr(&ftast, symf[i].stmt);
+		fprintf(stderr, "fun <%s>\n", ftptr(&ftident, fun->ident));
 		assert(analyzefun(fun, nsym));
 	}
 
