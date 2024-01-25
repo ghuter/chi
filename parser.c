@@ -509,90 +509,6 @@ parse_param(const ETok *t, SFun* fun)
 }
 
 static int
-parse_for_stmt(const ETok *t, intptr *stmt)
-{
-	const ETok eoe[] = {SEMICOLON, LBRACES, UNDEFINED};
-	int i = 0;
-	int res = -1;
-	int ident = -1;
-
-	if (t[i] != IDENTIFIER) {
-		ERR("Exepects a declaration / assign statement in a forloop header.");
-		return -1;
-	}
-	i++;
-	ident = t[i];
-	i++;
-
-	// case assign
-	if (t[i] >= ASSIGN && t[i] <= MOD_ASSIGN) {
-		i++;
-
-		intptr aaddr = ftalloc(&ftast, sizeof(SAssign));
-		*stmt = aaddr;
-
-		SAssign *assign = (SAssign*) ftptr(&ftast, aaddr);
-		assign->kind = SASSIGN;
-		assign->ident = ident;
-
-		res = parse_expression(t + i, eoe, &assign->expr);
-		if (res < 0) {
-			ERR("parse expression in a function.");
-			return -1;
-		}
-		i += res;
-
-		return i;
-	}
-
-	// case declaration
-	int cst = -1;
-	int type = -1;
-
-	if (t[i] != COLON) {
-		ERR("Unexpected token <%s> at the beginning of a statement in a forloop.\n|> Expects `:`", tokenstrs[t[i]]);
-		return -1;
-	}
-	i++;
-
-	if (t[i] == IDENTIFIER) {
-		i++;
-		type = t[i];
-		i++;
-	}
-
-	if (t[i] == COLON) {
-		i++;
-		cst = 1;
-	} else if (t[i] == ASSIGN) {
-		i++;
-		cst = 0;
-	} else {
-		ERR("Unexpected token <%s> in a declaration statement in a forloop.", tokenstrs[t[i]]);
-		return -1;
-	}
-
-	intptr daddr = ftalloc(&ftast, sizeof(SDecl));
-	*stmt = daddr;
-
-	SDecl *decl = (SDecl*) ftptr(&ftast, daddr);
-	decl->kind = SDECL;
-	decl->cst = cst;
-	decl->type = type;
-	decl->ident = ident;
-
-	res = parse_expression(t + i, eoe, &decl->expr);
-	if (res < 0) {
-		ERR("parsing expression in a declaration statement");
-		return -1;
-	}
-	i += res;
-
-	return i;
-
-}
-
-static int
 parse_stmt_return(const ETok *t, const ETok *eoe, intptr *stmt)
 {
 	int i = 0;
@@ -822,7 +738,7 @@ parse_stmt_for(const ETok *t, intptr *stmt)
 	}
 	i += res;
 
-	if (t[i-1] == LBRACES) {
+	if (t[i - 1] == LBRACES) {
 		// cancel the consume
 		i--;
 	}
@@ -1248,6 +1164,33 @@ parse_direct(const ETok *t, intptr *expr)
 		SAVECST(expr, kind, addr);
 		break;
 	}
+	case LPAREN: {
+		i++;
+		const ETok eoeparen[] = {RPAREN, UNDEFINED};
+		// Alloc paren
+		intptr paddr = ftalloc(&ftast, sizeof(EParen));
+		*expr = paddr;
+		intptr in = -1;
+
+		// Parse the expression
+		res = parse_expression(t + i, eoeparen, &in);
+		if (res < 0) {
+			ERR("Error when parsing expression `( expr `)`");
+			return -1;
+		}
+		i += res;
+
+		// Save paren
+		EParen *paren = (EParen*) ftptr(&ftast, paddr);
+		paren->kind = EPAREN;
+		paren->expr = in;
+		paren->type = -1;
+		paren->ptrlvl = 0;
+
+		// Consume RPAREN
+		i++;
+		break;
+	}
 
 	default:
 		ERR("Unexpected token <%s>", tokenstrs[t[i]]);
@@ -1401,7 +1344,7 @@ parse_otherop(const ETok *t, const ETok *eoe, intptr *expr)
 		ac->expr = addr;
 		ac->ident = ident;
 
-		res = parse_aftercall(t + i, eoe, addr, expr);
+		res = parse_aftercall(t + i, eoe, aaddr, expr);
 		if (res < 0) {
 			ERR("Error when parsing aftercall");
 			return -1;
@@ -1508,35 +1451,6 @@ parse_unop(const ETok *t, const ETok *eoe, intptr *expr)
 		}
 		i += res;
 		unop->expr = nxt;
-		return i;
-		break;
-	}
-	case LPAREN: {
-		i++;
-		const ETok eoeparen[] = {RPAREN, UNDEFINED};
-		// Alloc paren
-		intptr paddr = ftalloc(&ftast, sizeof(EParen));
-		*expr = paddr;
-		intptr in = -1;
-
-		// Parse the expression
-		res = parse_expression(t + i, eoeparen, &in);
-		if (res < 0) {
-			ERR("Error when parsing expression `( expr `)`");
-			return -1;
-		}
-		i += res;
-
-		// Save paren
-		EParen *paren = (EParen*) ftptr(&ftast, paddr);
-		paren->kind = EPAREN;
-		paren->expr = in;
-		paren->type = -1;
-		paren->ptrlvl = 0;
-
-		// Consume RPAREN
-		i++;
-
 		return i;
 		break;
 	}
