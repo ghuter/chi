@@ -12,6 +12,8 @@ char *keywords[] = {
 	[IMPORT]    = "import",
 	[ENUM]      = "enum",
 	[FUN]       = "fun",
+	[TRUE]      = "true",
+	[FALSE]     = "false",
 };
 
 char *tokenstrs[] = {
@@ -27,6 +29,8 @@ char *tokenstrs[] = {
 	[IMPORT]        = "IMPORT",
 	[ENUM]          = "ENUM",
 	[FUN]           = "FUN",
+	[TRUE]          = "TRUE",
+	[FALSE]         = "FALSE",
 
 	[INT]           = "INT",
 	[FLOAT]         = "FLOAT",

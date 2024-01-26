@@ -72,6 +72,8 @@ typedef enum {
 	IMPORT,
 	ENUM,
 	FUN,
+	TRUE,
+	FALSE,
 	NKEYWORDS, // must be the last "keyword"
 } ETok;
 
