@@ -193,6 +193,9 @@ printstmt(FILE *fd, intptr stmt)
 	case SDECL: {
 		SDecl *decl = (SDecl*) ptr;
 		char *type = decl->type ==  -1 ? "?" : (char*) ftptr(&ftident, decl->type);
+		if (decl->cst) {
+			fprintf(fd, "const ");
+		}
 		fprintf(fd, "%s(%s, ", stmtstrs[*ptr], (char*) ftptr(&ftident, decl->ident));
 		printexpr(fd, decl->expr);
 		fprintf(fd, ") : ");
