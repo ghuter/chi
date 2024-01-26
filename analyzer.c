@@ -479,64 +479,6 @@ computeconstype(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo)
 		*type = langtype2ident[BOOL];
 		*ptrlvl = 0;
 		return 1;
-	// case EBINOP: {
-	// 	EBinop *binop = (EBinop*) unknown;
-	// 	return computeconstype_binop(binop, type, ptrlvl, typeinfo);
-	// }
-	// case EUNOP: {
-	// 	EUnop *unop = (EUnop*) unknown;
-	// 	switch (unop->op) {
-	// 	case UOP_SUB:
-	// 	//fallthrough
-	// 	case UOP_LNOT:
-	// 	//fallthrough
-	// 	case UOP_BNOT:
-	// 		//fallthrough
-	// 	{
-	// 		if (!computeconstype(unop->expr, &unop->type, &unop->ptrlvl, typeinfo)) {
-	// 			ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
-	// 			return 0;
-	// 		}
-
-	// 		if (*ptrlvl > 0) {
-	// 			ERR("Error the unop <%s> can't be used on a pointer.", uopstrs[unop->op]);
-	// 			return 0;
-	// 		}
-
-	// 		*type = unop->type;
-	// 		*ptrlvl = unop->ptrlvl;
-	// 		return 1;
-	// 	}
-	// 	case UOP_DEREF:
-	// 		ERR("Unexpected op <%s> at the toplevel.", uopstrs[unop->op]);
-	// 		return 0;
-	// 	case UOP_AT:
-	// 		if (!computeconstype(unop->expr, &unop->type, &unop->ptrlvl, typeinfo)) {
-	// 			ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
-	// 			return 0;
-	// 		}
-	// 		*type = unop->type;
-	// 		*ptrlvl = (++unop->ptrlvl);
-
-	// 		return 1;
-	// 	case UOP_SIZEOF:
-	// 		if (!computeconstype(unop->expr, &unop->type, &unop->ptrlvl, typeinfo)) {
-	// 			ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
-	// 			return 0;
-	// 		}
-	// 		*type = unop->type;
-	// 		*ptrlvl = unop->ptrlvl;
-
-	// 		return 1;
-	// 	default:
-	// 		ERR("Unreachable unop op <%d>.", unop->op);
-	// 		return 0;
-	// 	}
-	//
-	// 	ERR("Unreachable unop op <%d>.", unop->op);
-	// 	return 0;
-	// }
-
 	case EPAREN: {
 		EParen *paren = (EParen*) unknown;
 		if (!computeconstype(paren->expr, &paren->type, &paren->ptrlvl, typeinfo)) {
@@ -1254,6 +1196,37 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 
 		if (type != sym->type || ptrlvl != sym->ptrlvl) {
 			ERR("Assign in the var <%s> of the type <%s : ptrlvl(%d)> an expression of the type <%s : ptrlvl(%d)>.", identstr(a->ident), identstr(sym->type), sym->ptrlvl, identstr(type), ptrlvl);
+			return 0;
+		}
+
+		return 1;
+	}
+	case SEXPRASSIGN: {
+		TODO("SEXPRASSIGN");
+		SExprAssign *a = (SExprAssign*) unknown;
+
+		UnknownExpr *left = (UnknownExpr*) ftptr(&ftast, a->left);
+		if (*left != ESUBSCR && *left != EACCESS && *left != EMEM) {
+			ERR("Unexpected expression <%s> at the left expression of an assign.", exprstrs[*left]);
+			return 0;
+		}
+
+		intptr ltype = -1;
+		int lptrlvl = -1;
+		if (!analyzefunexpr(a->left, &ltype, &lptrlvl, -1, *nsym)) {
+			ERR("Error when parsing the expression in an assign.");
+			return 0;
+		}
+
+		intptr rtype = -1;
+		int rptrlvl = -1;
+		if (!analyzefunexpr(a->right, &rtype, &rptrlvl, ltype, *nsym)) {
+			ERR("Error when parsing the expression in an assign.");
+			return 0;
+		}
+
+		if (ltype != rtype || lptrlvl != rptrlvl) {
+			ERR("Assign: left is <%s : ptrlvl(%d)> and right <%s : ptrlvl(%d)>.", identstr(ltype), lptrlvl, identstr(rtype), rptrlvl);
 			return 0;
 		}
 
