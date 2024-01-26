@@ -110,6 +110,12 @@ typedef struct {
 
 typedef struct {
 	EStmt kind;
+	intptr left;
+	intptr right;
+} SExprAssing;
+
+typedef struct {
+	EStmt kind;
 	intptr ident;
 } SImport;
 
@@ -120,6 +126,8 @@ typedef enum {
 	ECSTI,
 	ECSTF,
 	ECSTS,
+	ETRUE,
+	EFALSE,
 	EMEM,
 	EBINOP,
 	EUNOP,

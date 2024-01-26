@@ -83,8 +83,10 @@ do {                                                                            
 #define ISMONADICOP(_op) (_op == SUB || _op == LNOT || _op == BNOT || _op == BXOR || _op == AT || _op == SIZEOF)
 #define ISBINOP(_op) (_op >= MUL && _op <= LNOT)
 #define TOKTOOP(_t) ((_t) - MUL)
+#define TOKTOASSIGN(_t) ((_t) - ASSIGN)
 #define TYPESTR(_type) (_type == -1 ? "?" : (char*) ftptr(&ftident, _type))
 #define identstr(_ident) ((char*) ftptr(&ftident, _ident))
+#define ASSIGN2OP(_t) (assigntable[_t - assign_offset])
 
 extern FatArena ftident;
 extern FatArena ftimmed;
@@ -112,6 +114,8 @@ const char *exprstrs[NEXPR] = {
 	[ECSTI]   = "ECSTI",
 	[ECSTF]   = "ECSTF",
 	[ECSTS]   = "ECSTS",
+	[ETRUE]   = "ETRUE",
+	[EFALSE]  = "EFALSE",
 	[EMEM]    = "EMEM",
 	[EBINOP]  = "EBINOP",
 	[EUNOP]   = "EUNOP",
@@ -144,13 +148,32 @@ const char *opstrs[OP_NUM] = {
 	[OP_BNOT]   = "BNOT",
 	[OP_LNOT]   = "LNOT",
 };
+
 const char *uopstrs[UOP_NUM] = {
 	[UOP_SUB]    = "SUB",
 	[UOP_LNOT]   = "LNOT",
 	[UOP_BNOT]   = "BNOT",
-	[UOP_DEREF]   = "DEREF",
+	[UOP_DEREF]  = "DEREF",
 	[UOP_AT]     = "AT",
 	[UOP_SIZEOF] = "SIZEOF",
+};
+
+static const int assign_offset = ASSIGN;
+static const Op assigntable[MOD_ASSIGN - ASSIGN + 1] = {
+	[ASSIGN - ASSIGN] = -1,
+	[BAND_ASSIGN - ASSIGN] = OP_BAND,
+	[BOR_ASSIGN - ASSIGN] = OP_BOR,
+	[BXOR_ASSIGN - ASSIGN] = OP_BXOR,
+	[BNOT_ASSIGN - ASSIGN] = OP_BNOT,
+	[LAND_ASSIGN - ASSIGN] = OP_LAND,
+	[LOR_ASSIGN - ASSIGN] = OP_LOR,
+	[LSHIFT_ASSIGN - ASSIGN] = OP_LSHIFT,
+	[RSHIFT_ASSIGN - ASSIGN] = OP_RSHIFT,
+	[ADD_ASSIGN - ASSIGN] = OP_ADD,
+	[SUB_ASSIGN - ASSIGN] = OP_SUB,
+	[MUL_ASSIGN - ASSIGN] = OP_MUL,
+	[DIV_ASSIGN - ASSIGN] = OP_DIV,
+	[MOD_ASSIGN - ASSIGN] = OP_MOD,
 };
 
 void printexpr(FILE *fd, intptr expr);
@@ -330,6 +353,10 @@ printexpr(FILE* fd, intptr expr)
 		fprintf(fd, "%s(%s)", exprstrs[*ptr], (char*) ftptr(&ftlit, csts->addr));
 		return;
 	}
+	case ETRUE:
+	case EFALSE:
+		fprintf(fd, "%s", exprstrs[*ptr]);
+		return;
 	case EMEM: {
 		Mem *mem = (Mem*) ptr;
 		fprintf(fd, "%s(%s)", exprstrs[*ptr], (char*) ftptr(&ftident, mem->addr));
@@ -541,7 +568,7 @@ parse_stmt_return(const ETok *t, const ETok *eoe, intptr *stmt)
 }
 
 static int
-parse_stmt_assign(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident)
+parse_stmt_assign(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident, int op)
 {
 	int i = 0;
 	int res = -1;
@@ -553,12 +580,32 @@ parse_stmt_assign(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident)
 	assign->kind = SASSIGN;
 	assign->ident = ident;
 
-	res = parse_expression(t + i, eoe, &assign->expr);
+	intptr *expr = &assign->expr;
+	if (op != -1) {
+		intptr baddr = ftalloc(&ftast, sizeof(EBinop));
+		assign->expr = baddr;
+		EBinop *b = (EBinop*) ftptr(&ftast, baddr);
+		b->kind = EBINOP;
+		b->op = op;
+		b->type = -1;
+		b->ptrlvl = 0;
+
+		intptr maddr = ftalloc(&ftast, sizeof(Mem));
+		Mem *mem = (Mem*) ftptr(&ftast, maddr);
+		mem->addr = ident;
+		mem->kind = EMEM;
+		b->left = maddr;
+
+		expr = &b->right;
+	}
+
+	res = parse_expression(t + i, eoe, expr);
 	if (res < 0) {
 		ERR("parse expression in a function.");
 		return -1;
 	}
 	i += res;
+
 
 	ISTOK(t[i], eoe, res);
 	if (!res) {
@@ -825,8 +872,9 @@ parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 		i++;
 
 		if (t[i] >= ASSIGN && t[i] <= MOD_ASSIGN) {
+			Op op = ASSIGN2OP(t[i]);
 			i++;
-			res = parse_stmt_assign(t + i, eoe, stmt, ident);
+			res = parse_stmt_assign(t + i, eoe, stmt, ident, op);
 			break;
 		}
 
@@ -834,6 +882,16 @@ parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 			i++;
 			res = parse_stmt_call(t + i, eoe, stmt, ident);
 			break;
+		}
+
+		if (t[i] == DOT) {
+			TODO("Handle struct access");
+			return -1;
+		}
+
+		if (t[i] == LBRACKETS) {
+			TODO("Handle array access");
+			return -1;
 		}
 
 		res = parse_stmt_decl(t + i, eoe, stmt, ident);
@@ -1124,7 +1182,7 @@ parse_struct_elem(const ETok *t, const intptr addr, intptr *expr)
 }
 
 static int
-parse_direct(const ETok *t, intptr *expr)
+parse_direct(const ETok *t, const ETok *eoe, intptr *expr)
 {
 	int i = 0;
 	int add = 0;
@@ -1137,8 +1195,9 @@ parse_direct(const ETok *t, intptr *expr)
 		intptr addr = t[i];
 		i++;
 
+		ISTOK(t[i], eoe, res);
 		// case init a struct
-		if (t[i] == LBRACES) {
+		if (!res && t[i] == LBRACES) {
 			res = parse_struct_elem(t + i, addr, expr);
 			if (res < 0) {
 				ERR("Error when parsing the elements in a struct init.");
@@ -1165,6 +1224,17 @@ parse_direct(const ETok *t, intptr *expr)
 		intptr addr = t[i];
 		i++;
 		SAVECST(expr, kind, addr);
+		break;
+	}
+	case FALSE:
+		add ++;
+	// fallthrough
+	case TRUE: {
+		i++;
+		intptr baddr = ftalloc(&ftast, sizeof(UnknownExpr));
+		UnknownExpr* b = (UnknownExpr*) ftptr(&ftast, baddr);
+		*b = ETRUE + add;
+		*expr = baddr;
 		break;
 	}
 	case LPAREN: {
@@ -1324,7 +1394,7 @@ parse_otherop(const ETok *t, const ETok *eoe, intptr *expr)
 	int res = -1;
 	intptr addr = -1;
 
-	res = parse_direct(t + i, &addr);
+	res = parse_direct(t + i, eoe, &addr);
 	if (res < 0) {
 		return -1;
 	}
