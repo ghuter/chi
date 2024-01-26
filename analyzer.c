@@ -34,7 +34,7 @@ extern Symbols identsym;
 extern Symbols typesym;
 extern SymInfo *syminfo;
 
-char* langtypestr[NLANGTYPE] = {
+const char* langtypestrs[NLANGTYPE] = {
 	[BOOL] = "bool",
 	[U8]   = "u8",
 	[U16]  = "u16",
@@ -51,9 +51,23 @@ char* langtypestr[NLANGTYPE] = {
 };
 
 static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
-	[BOOL] = {-1},
+	[BOOL] = {
+		[BOOL] = BOOL,
+		[U8]   = BOOL,
+		[U16]  = BOOL,
+		[U32]  = BOOL,
+		[U64]  = BOOL,
+		[U128] = BOOL,
+		[I8]   = BOOL,
+		[I16]  = BOOL,
+		[I32]  = BOOL,
+		[I64]  = BOOL,
+		[I128] = BOOL,
+		[F32]  = BOOL,
+		[F64]  = BOOL,
+	},
 	[U8] = {
-		[BOOL] = -1,
+		[BOOL] = BOOL,
 		[U8]   = U8,
 		[U16]  = U16,
 		[U32]  = U32,
@@ -68,7 +82,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[U16] = {
-		[BOOL] = -1,
+		[BOOL] = BOOL,
 		[U8]   = U16,
 		[U16]  = U16,
 		[U32]  = U32,
@@ -83,7 +97,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[U32] = {
-		[BOOL] = -1,
+		[BOOL] = BOOL,
 		[U8]   = U32,
 		[U16]  = U32,
 		[U32]  = U32,
@@ -98,7 +112,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[U64] = {
-		[BOOL] = -1,
+		[BOOL] = BOOL,
 		[U8]   = U64,
 		[U16]  = U64,
 		[U32]  = U64,
@@ -113,7 +127,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[U128] = {
-		[BOOL] = -1,
+		[BOOL] = BOOL,
 		[U8]   = U128,
 		[U16]  = U128,
 		[U32]  = U128,
@@ -128,7 +142,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[I8] = {
-		[BOOL] = -1,
+		[BOOL] = BOOL,
 		[U8]   = I8,
 		[U16]  = I16,
 		[U32]  = I32,
@@ -143,7 +157,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[I16] = {
-		[BOOL] = -1,
+		[BOOL] = BOOL,
 		[U8]   = I16,
 		[U16]  = I16,
 		[U32]  = I32,
@@ -158,7 +172,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[I32] = {
-		[BOOL] = -1,
+		[BOOL] = BOOL,
 		[U8]   = I32,
 		[U16]  = I32,
 		[U32]  = I32,
@@ -173,7 +187,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[I64] = {
-		[BOOL] = -1,
+		[BOOL] = BOOL,
 		[U8]   = I64,
 		[U16]  = I64,
 		[U32]  = I64,
@@ -188,7 +202,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[I128] = {
-		[BOOL] = -1,
+		[BOOL] = BOOL,
 		[U8]   = I128,
 		[U16]  = I128,
 		[U32]  = I128,
@@ -203,7 +217,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[F32] = {
-		[BOOL] = -1,
+		[BOOL] = BOOL,
 		[U8]   = F32,
 		[U16]  = F32,
 		[U32]  = F32,
@@ -218,7 +232,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[F64] = {
-		[BOOL] = -1,
+		[BOOL] = BOOL,
 		[U8]   = F64,
 		[U16]  = F64,
 		[U32]  = F64,
@@ -406,8 +420,9 @@ promotion(intptr type1, int ptrlvl1, intptr type2, int ptrlvl2, int *rtype, intp
 	// Both are langtype.
 	LangType ltype1 = ident2langtype[type1 - typeoffset];
 	LangType ltype2 = ident2langtype[type2 - typeoffset];
+	LangType newtype = promotiontable[ltype1][ltype2];
 
-	*rtype = langtype2ident[promotiontable[ltype1][ltype2]];
+	*rtype = langtype2ident[newtype];
 	*rptrlvl = 0;
 
 	return 1;
@@ -458,6 +473,11 @@ computeconstype(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo)
 	case ECSTS:
 		*type = langtype2ident[U8];
 		*ptrlvl = 1;
+		return 1;
+	case ETRUE:
+	case EFALSE:
+		*type = langtype2ident[BOOL];
+		*ptrlvl = 0;
 		return 1;
 	// case EBINOP: {
 	// 	EBinop *binop = (EBinop*) unknown;
@@ -645,10 +665,16 @@ analyzebinop(EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 			return 0;
 		}
 
+		if (type1 == langtype2ident[BOOL] || type2 == langtype2ident[BOOL]) {
+			ERR("Incompatible op <%s> with expressions left: <%s ptrlvl(%d)>, right: <%s ptrlvl(%d)>.", opstrs[binop->op], identstr(type1), ptrlvl1, identstr(type2), ptrlvl2);
+			return 0;
+		}
+
 		if (!promotion(type1, ptrlvl1, type2, ptrlvl2, &binop->type, &binop->ptrlvl)) {
 			ERR("Error when promoting the type of a const declaration binop.");
 			return 0;
 		}
+		assert(binop->type != 0);
 
 		*type = binop->type;
 		*ptrlvl = binop->ptrlvl;
@@ -682,7 +708,6 @@ analyzebinop(EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 			TODO("Verify if it's a ptr...");
 			return 0;
 		}
-
 
 		if (type1 != type2 || ptrlvl1 != ptrlvl2) {
 			ERR("Impossible to compare two things with a different types.");
@@ -728,8 +753,8 @@ analyzebinop(EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 
 		LangType ltype = ident2langtype[binop->type - typeoffset];
 		if (ltype == F32 || ltype == F64 || ltype == BOOL) {
-			ERR("Can't performe a bit op on a <%s>.", langtypestr[ltype]);
-			return 0;
+			ERR("Incompatible op <%s> with expressions left: <%s ptrlvl(%d)>, right: <%s ptrlvl(%d)>.", opstrs[binop->op], identstr(type1), ptrlvl1, identstr(type2), ptrlvl2);
+		 	return 0;
 		}
 
 		*type = binop->type;
@@ -849,49 +874,49 @@ analyzestruct(EStruct *st, intptr *type, int nsym)
 Bool
 analyzecall(ECall *call, intptr *type, int *ptrlvl, int nsym)
 {
-		Mem* expr = (Mem*) ftptr(&ftast, call->expr);
+	Mem* expr = (Mem*) ftptr(&ftast, call->expr);
 
-		if (expr->kind != EMEM) {
-			TODO("Function pointer isn't available yet.");
+	if (expr->kind != EMEM) {
+		TODO("Function pointer isn't available yet.");
+		return 0;
+	}
+
+	Symbol *sym = searchtopdcl(&funsym, expr->addr);
+	if (sym == NULL) {
+		ERR("The function <%s> is called but never declared.", identstr(expr->addr));
+		return 0;
+	}
+	SFun *stmt = (SFun*) ftptr(&ftast, sym->stmt);
+	assert(stmt->kind == SFUN);
+
+	call->type = stmt->type;
+	call->ptrlvl = stmt->ptrlvl;
+
+	*type = stmt->type;
+	*ptrlvl = stmt->ptrlvl;
+
+	if (stmt->nparam != call->nparam) {
+		ERR("The number of param (%d) in the function call of <%s> doesn't match with the signature (%d).", call->nparam, identstr(expr->addr), stmt->nparam);
+		return 0;
+	}
+
+	intptr *exprs = (intptr*) ftptr(&ftast, call->params);
+	SMember *params = (SMember*) ftptr(&ftast, stmt->params);
+	for (int i = 0; i < call->nparam; i++) {
+		intptr type;
+		int ptrlvl;
+		if (!analyzefunexpr(exprs[i], &type, &ptrlvl, params[i].type, nsym)) {
+			ERR("Error when parsing the expression in a fun call expression.");
 			return 0;
 		}
 
-		Symbol *sym = searchtopdcl(&funsym, expr->addr);
-		if (sym == NULL) {
-			ERR("The function <%s> is called but never declared.", identstr(expr->addr));
+		if (type != params[i].type || ptrlvl != params[i].ptrlvl) {
+			ERR("The param type <%s of <%s> doesn't match with the signature.", identstr(params[i].ident), identstr(expr->addr));
 			return 0;
 		}
-		SFun *stmt = (SFun*) ftptr(&ftast, sym->stmt);
-		assert(stmt->kind == SFUN);
-
-		call->type = stmt->type;
-		call->ptrlvl = stmt->ptrlvl;
-
-		*type = stmt->type;
-		*ptrlvl = stmt->ptrlvl;
-
-		if (stmt->nparam != call->nparam) {
-			ERR("The number of param (%d) in the function call of <%s> doesn't match with the signature (%d).", call->nparam, identstr(expr->addr), stmt->nparam);
-			return 0;
-		}
-
-		intptr *exprs = (intptr*) ftptr(&ftast, call->params);
-		SMember *params = (SMember*) ftptr(&ftast, stmt->params);
-		for (int i = 0; i < call->nparam; i++) {
-			intptr type;
-			int ptrlvl;
-			if (!analyzefunexpr(exprs[i], &type, &ptrlvl, params[i].type, nsym)) {
-				ERR("Error when parsing the expression in a fun call expression.");
-				return 0;
-			}
-
-			if (type != params[i].type || ptrlvl != params[i].ptrlvl) {
-				ERR("The param type <%s of <%s> doesn't match with the signature.", identstr(params[i].ident), identstr(expr->addr));
-				return 0;
-			}
-		}
-		TODO("OK for ECALL");
-		return 1;
+	}
+	TODO("OK for ECALL");
+	return 1;
 }
 
 Bool
@@ -946,7 +971,7 @@ analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 				ERR("The type <%s> provided by the user can't match the expression type: <%s>.", identstr(typeinfo), exprstrs[*unknown]);
 				return 0;
 			}
-			if (typeinfo == langtype2ident[F32] || typeinfo == langtype2ident[F64]) {
+			if (typeinfo == langtype2ident[F32] || typeinfo == langtype2ident[F64] || typeinfo == langtype2ident[BOOL]) {
 				ERR("The type <%s> provided by the user can't match the expression type: <%s>.", identstr(typeinfo), exprstrs[*unknown]);
 				return 0;
 			}
@@ -968,6 +993,11 @@ analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 	case ECSTS:
 		*type = langtype2ident[U8];
 		*ptrlvl = 1;
+		return 1;
+	case ETRUE:
+	case EFALSE:
+		*type = langtype2ident[BOOL];
+		*ptrlvl = 0;
 		return 1;
 	case EBINOP: {
 		EBinop *binop = (EBinop*) unknown;

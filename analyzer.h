@@ -48,7 +48,7 @@ typedef enum {
 	NLANGTYPE,
 } LangType;
 
-extern char* langtypestr[NLANGTYPE];
+extern const char* langtypestrs[NLANGTYPE];
 
 // -------------------- Functions
 
