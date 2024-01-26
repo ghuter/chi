@@ -479,17 +479,6 @@ computeconstype(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo)
 		*type = langtype2ident[BOOL];
 		*ptrlvl = 0;
 		return 1;
-	case EPAREN: {
-		EParen *paren = (EParen*) unknown;
-		if (!computeconstype(paren->expr, &paren->type, &paren->ptrlvl, typeinfo)) {
-			ERR("Error when computing a paren type.");
-			return 0;
-		}
-
-		*type = paren->type;
-		*ptrlvl = paren->ptrlvl;
-		return 1;
-	}
 	case ESTRUCT: {
 		EStruct* st = (EStruct*) unknown;
 		*type = st->ident;
@@ -954,17 +943,6 @@ analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 		unop->ptrlvl = *ptrlvl;
 		unop->type = *type;
 		return res;
-	}
-	case EPAREN: {
-		EParen *paren = (EParen*) unknown;
-		if (!analyzefunexpr(paren->expr, &paren->type, &paren->ptrlvl, typeinfo, nsym)) {
-			ERR("Error when computing a paren type.");
-			return 0;
-		}
-
-		*type = paren->type;
-		*ptrlvl = paren->ptrlvl;
-		return 1;
 	}
 	case ESTRUCT: {
 		EStruct* st = (EStruct*) unknown;
