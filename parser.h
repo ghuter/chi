@@ -27,6 +27,7 @@ typedef enum {
 	SCALL,
 	SIMPORT,
 	SBLOCK,
+	SEXPRASSIGN,
 	NSTATEMENT,
 } EStmt;
 
@@ -110,9 +111,9 @@ typedef struct {
 
 typedef struct {
 	EStmt kind;
-	intptr left;
-	intptr right;
-} SExprAssing;
+	intptr left;  // UnknownExpr*
+	intptr right; // UnknownExpr*
+} SExprAssign;
 
 typedef struct {
 	EStmt kind;

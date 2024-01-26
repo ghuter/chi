@@ -93,20 +93,21 @@ extern FatArena ftimmed;
 extern FatArena ftlit;
 
 const char *stmtstrs[NSTATEMENT] = {
-	[NOP]        = "NOP",
-	[SSEQ]       = "SSEQ",
-	[SSTRUCT]    = "SSTRUCT",
-	[SENUM]      = "SENUM",
-	[SINTERFACE] = "SINTERFACE",
-	[SFUN]       = "SFUN",
-	[SDECL]      = "SDECL",
-	[SIF]        = "SIF",
-	[SELSE]      = "SELSE",
-	[SASSIGN]    = "SASSIGN",
-	[SFOR]       = "SFOR",
-	[SCALL]      = "SCALL",
-	[SRETURN]    = "SRETURN",
-	[SIMPORT]    = "SIMPORT",
+	[NOP]         = "NOP",
+	[SSEQ]        = "SSEQ",
+	[SSTRUCT]     = "SSTRUCT",
+	[SENUM]       = "SENUM",
+	[SINTERFACE]  = "SINTERFACE",
+	[SFUN]        = "SFUN",
+	[SDECL]       = "SDECL",
+	[SIF]         = "SIF",
+	[SELSE]       = "SELSE",
+	[SASSIGN]     = "SASSIGN",
+	[SFOR]        = "SFOR",
+	[SCALL]       = "SCALL",
+	[SRETURN]     = "SRETURN",
+	[SIMPORT]     = "SIMPORT",
+	[SEXPRASSIGN] = "SEXPRASSIGN",
 };
 
 const char *exprstrs[NEXPR] = {
@@ -268,6 +269,15 @@ printstmt(FILE *fd, intptr stmt)
 		SAssign *assign = (SAssign*) ptr;
 		fprintf(fd, "%s(%s, ", stmtstrs[*ptr], (char*) ftptr(&ftident, assign->ident));
 		printexpr(fd, assign->expr);
+		fprintf(fd, ")");
+		return;
+	}
+	case SEXPRASSIGN: {
+		SExprAssign *a = (SExprAssign*) ptr;
+		fprintf(fd, "%s(", stmtstrs[*ptr]);
+		printexpr(fd, a->left);
+		fprintf(fd, ", ");
+		printexpr(fd, a->right);
 		fprintf(fd, ")");
 		return;
 	}
@@ -568,6 +578,61 @@ parse_stmt_return(const ETok *t, const ETok *eoe, intptr *stmt)
 }
 
 static int
+parse_stmt_assignexpr(const ETok *t, const ETok *eoe, intptr *stmt, intptr left)
+{
+	int i = 0;
+	int res = -1;
+
+	intptr aaddr = ftalloc(&ftast, sizeof(SExprAssign));
+	*stmt = aaddr;
+
+	SExprAssign *a = (SExprAssign*) ftptr(&ftast, aaddr);
+	a->kind = SEXPRASSIGN;
+	a->left = left;
+
+	if (t[i] < ASSIGN || t[i] > MOD_ASSIGN) {
+		ERR("Expects an assign but found <%s>.", tokenstrs[t[i]]);
+		return -1;
+	}
+	int op = ASSIGN2OP(t[i]);
+	i++;
+
+	intptr *expr = &a->right;
+	if (op != -1) {
+		intptr baddr = ftalloc(&ftast, sizeof(EBinop));
+		a->right = baddr;
+		EBinop *b = (EBinop*) ftptr(&ftast, baddr);
+		b->kind = EBINOP;
+		b->op = op;
+		b->type = -1;
+		b->ptrlvl = 0;
+		b->left = left;
+
+		expr = &b->right;
+	}
+
+	res = parse_expression(t + i, eoe, expr);
+	if (res < 0) {
+		ERR("parse expression in a function.");
+		return -1;
+	}
+	i += res;
+
+
+	ISTOK(t[i], eoe, res);
+	if (!res) {
+		ERR("The assign doesn't finish with the correct token.");
+		ERR("Tok(%d): %s, Eoe:", t[i], tokenstrs[t[i]]);
+		return -1;
+	}
+
+	printstmt(stderr, *stmt);
+	// consume `;`
+	i++;
+	return i;
+}
+
+static int
 parse_stmt_assign(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident, int op)
 {
 	int i = 0;
@@ -854,6 +919,14 @@ parse_stmt_block(const ETok *t, intptr *stmt)
 	return i;
 }
 
+static const ETok assigneoe[] = { 
+	ASSIGN, BAND_ASSIGN, BOR_ASSIGN,
+	BXOR_ASSIGN, BNOT_ASSIGN, LAND_ASSIGN,
+	LOR_ASSIGN, LSHIFT_ASSIGN, RSHIFT_ASSIGN,
+	ADD_ASSIGN, SUB_ASSIGN, MUL_ASSIGN,
+	DIV_ASSIGN, MOD_ASSIGN, UNDEFINED
+};
+
 static int
 parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 {
@@ -864,6 +937,23 @@ parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 	case RETURN: {
 		i++;
 		res = parse_stmt_return(t + i, eoe, stmt);
+		break;
+	}
+	case LPAREN:
+	case BXOR: {
+		intptr expr = -1;
+		res = parse_expression(t + i, assigneoe, &expr);
+		if (res < 0) {
+			ERR("Error when parsing the left part of an assign.");
+			return -1;
+		}
+		i += res;
+
+		res = parse_stmt_assignexpr(t + i, eoe, stmt, expr);
+		if (res < 0) {
+			ERR("Error when parsing the left part of an assign.");
+			return -1;
+		}
 		break;
 	}
 	case IDENTIFIER:
@@ -884,14 +974,23 @@ parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 			break;
 		}
 
-		if (t[i] == DOT) {
-			TODO("Handle struct access");
-			return -1;
-		}
+		if (t[i] == DOT || t[i] == LBRACKETS) {
+			intptr expr = -1;
+			i -= 2;
 
-		if (t[i] == LBRACKETS) {
-			TODO("Handle array access");
-			return -1;
+			res = parse_expression(t + i, assigneoe, &expr);
+			if (res < 0) {
+				ERR("Error when parsing the left part of an assign.");
+				return -1;
+			}
+			i += res;
+
+			res = parse_stmt_assignexpr(t + i, eoe, stmt, expr);
+			if (res < 0) {
+				ERR("Error when parsing the left part of an assign.");
+				return -1;
+			}
+			break;
 		}
 
 		res = parse_stmt_decl(t + i, eoe, stmt, ident);
@@ -1323,6 +1422,8 @@ parse_aftercall(const ETok *t, const ETok *eoe, intptr cexpr, intptr *expr)
 		ac->kind = EACCESS;
 		ac->expr = cexpr;
 		ac->ident = ident;
+		ac->type = -1;
+		ac->ptrlvl = 0;
 
 		res = parse_aftercall(t + i, eoe, aaddr, expr);
 		if (res < 0) {
@@ -1416,6 +1517,8 @@ parse_otherop(const ETok *t, const ETok *eoe, intptr *expr)
 		ac->kind = EACCESS;
 		ac->expr = addr;
 		ac->ident = ident;
+		ac->type = -1;
+		ac->ptrlvl = 0;
 
 		res = parse_aftercall(t + i, eoe, aaddr, expr);
 		if (res < 0) {
