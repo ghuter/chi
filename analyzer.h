@@ -12,6 +12,7 @@ typedef struct {
 	intptr ident;
 	intptr type;
 	int    ptrlvl;
+	Bool cst;
 } SymInfo;
 
 typedef struct {
@@ -22,6 +23,9 @@ typedef struct {
 // -------------------- System types
 
 typedef enum {
+	// Boolean
+	BOOL,
+
 	// Unsigned
 	U8,
 	U16,
@@ -29,14 +33,14 @@ typedef enum {
 	U64,
 	U128,
 
-	// sIGNED
+	// Signed
 	I8,
 	I16,
 	I32,
 	I64,
 	I128,
 
-	// fLOAT
+	// Float
 	F32,
 	F64,
 

@@ -35,6 +35,7 @@ extern Symbols typesym;
 extern SymInfo *syminfo;
 
 char* langtypestr[NLANGTYPE] = {
+	[BOOL] = "bool",
 	[U8]   = "u8",
 	[U16]  = "u16",
 	[U32]  = "u32",
@@ -50,7 +51,9 @@ char* langtypestr[NLANGTYPE] = {
 };
 
 static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
+	[BOOL] = {-1},
 	[U8] = {
+		[BOOL] = -1,
 		[U8]   = U8,
 		[U16]  = U16,
 		[U32]  = U32,
@@ -65,6 +68,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[U16] = {
+		[BOOL] = -1,
 		[U8]   = U16,
 		[U16]  = U16,
 		[U32]  = U32,
@@ -79,6 +83,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[U32] = {
+		[BOOL] = -1,
 		[U8]   = U32,
 		[U16]  = U32,
 		[U32]  = U32,
@@ -93,6 +98,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[U64] = {
+		[BOOL] = -1,
 		[U8]   = U64,
 		[U16]  = U64,
 		[U32]  = U64,
@@ -107,6 +113,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[U128] = {
+		[BOOL] = -1,
 		[U8]   = U128,
 		[U16]  = U128,
 		[U32]  = U128,
@@ -121,6 +128,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[I8] = {
+		[BOOL] = -1,
 		[U8]   = I8,
 		[U16]  = I16,
 		[U32]  = I32,
@@ -135,6 +143,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[I16] = {
+		[BOOL] = -1,
 		[U8]   = I16,
 		[U16]  = I16,
 		[U32]  = I32,
@@ -149,6 +158,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[I32] = {
+		[BOOL] = -1,
 		[U8]   = I32,
 		[U16]  = I32,
 		[U32]  = I32,
@@ -163,6 +173,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[I64] = {
+		[BOOL] = -1,
 		[U8]   = I64,
 		[U16]  = I64,
 		[U32]  = I64,
@@ -177,6 +188,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[I128] = {
+		[BOOL] = -1,
 		[U8]   = I128,
 		[U16]  = I128,
 		[U32]  = I128,
@@ -191,6 +203,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[F32] = {
+		[BOOL] = -1,
 		[U8]   = F32,
 		[U16]  = F32,
 		[U32]  = F32,
@@ -205,6 +218,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 		[F64]  = F64,
 	},
 	[F64] = {
+		[BOOL] = -1,
 		[U8]   = F64,
 		[U16]  = F64,
 		[U32]  = F64,
@@ -220,6 +234,9 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 	},
 };
 
+Bool computeconstype(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo);
+Bool analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym);
+
 void
 printsymbols(Symbols *syms)
 {
@@ -234,6 +251,9 @@ void
 printsymbolsinfo(int nsym)
 {
 	for (int i = nsym - 1; i >= 0; i--) {
+		if (syminfo[i].cst) {
+			fprintf(stderr, "const ");
+		}
 		fprintf(stderr, "%s : ", identstr(syminfo[i].ident));
 		int ptrlvl = syminfo[i].ptrlvl;
 		while (ptrlvl-- > 0) {
@@ -246,17 +266,17 @@ printsymbolsinfo(int nsym)
 	fprintf(stderr, "\n");
 }
 
-int
+Symbol*
 searchtopdcl(Symbols *syms, intptr ident)
 {
 	Symbol *sym = (Symbol*) ftptr(&ftsym, syms->array);
 	for (int i = 0; i < syms->nsym; i++) {
 		if (ident == sym[i].ident) {
-			return i;
+			return sym + i;
 		}
 	}
 
-	return -1;
+	return NULL;
 }
 
 Bool
@@ -301,6 +321,7 @@ insertsyminfo(int nsym, int block, SDecl *decl)
 	syminfo[nsym].ident = decl->ident;
 	syminfo[nsym].type = decl->type;
 	syminfo[nsym].ptrlvl = decl->ptrlvl;
+	syminfo[nsym].cst = decl->cst;
 
 	return 1;
 }
@@ -316,6 +337,20 @@ searchsyminfo(int nsym, intptr ident)
 
 	return NULL;
 }
+
+
+SMember*
+searchmember(intptr members, int nmember, intptr ident)
+{
+	SMember *member = (SMember*) ftptr(&ftast, members);
+	for (int i = 0; i < nmember; i++) {
+		if (member[i].ident == ident) {
+			return member + i;
+		}
+	}
+	return NULL;
+}
+
 
 Bool
 promotion(intptr type1, int ptrlvl1, intptr type2, int ptrlvl2, int *rtype, intptr *rptrlvl)
@@ -424,87 +459,63 @@ computeconstype(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo)
 		*type = langtype2ident[U8];
 		*ptrlvl = 1;
 		return 1;
-	case EBINOP: {
-		EBinop *binop = (EBinop*) unknown;
-		intptr type1;
-		int ptrlvl1;
+	// case EBINOP: {
+	// 	EBinop *binop = (EBinop*) unknown;
+	// 	return computeconstype_binop(binop, type, ptrlvl, typeinfo);
+	// }
+	// case EUNOP: {
+	// 	EUnop *unop = (EUnop*) unknown;
+	// 	switch (unop->op) {
+	// 	case UOP_SUB:
+	// 	//fallthrough
+	// 	case UOP_LNOT:
+	// 	//fallthrough
+	// 	case UOP_BNOT:
+	// 		//fallthrough
+	// 	{
+	// 		if (!computeconstype(unop->expr, &unop->type, &unop->ptrlvl, typeinfo)) {
+	// 			ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
+	// 			return 0;
+	// 		}
 
-		intptr type2;
-		int ptrlvl2;
+	// 		if (*ptrlvl > 0) {
+	// 			ERR("Error the unop <%s> can't be used on a pointer.", uopstrs[unop->op]);
+	// 			return 0;
+	// 		}
 
-		if (!computeconstype(binop->left, &type1, &ptrlvl1, typeinfo)) {
-			ERR("Error when computing the type of a const declaration binop.");
-			return 0;
-		}
+	// 		*type = unop->type;
+	// 		*ptrlvl = unop->ptrlvl;
+	// 		return 1;
+	// 	}
+	// 	case UOP_DEREF:
+	// 		ERR("Unexpected op <%s> at the toplevel.", uopstrs[unop->op]);
+	// 		return 0;
+	// 	case UOP_AT:
+	// 		if (!computeconstype(unop->expr, &unop->type, &unop->ptrlvl, typeinfo)) {
+	// 			ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
+	// 			return 0;
+	// 		}
+	// 		*type = unop->type;
+	// 		*ptrlvl = (++unop->ptrlvl);
 
-		if (!computeconstype(binop->right, &type2, &ptrlvl2, typeinfo)) {
-			ERR("Error when computing the type of a const declaration binop.");
-			return 0;
-		}
+	// 		return 1;
+	// 	case UOP_SIZEOF:
+	// 		if (!computeconstype(unop->expr, &unop->type, &unop->ptrlvl, typeinfo)) {
+	// 			ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
+	// 			return 0;
+	// 		}
+	// 		*type = unop->type;
+	// 		*ptrlvl = unop->ptrlvl;
 
-		if (!promotion(type1, ptrlvl1, type2, ptrlvl2, &binop->type, &binop->ptrlvl)) {
-			ERR("Error when promoting the type of a const declaration binop.");
-			return 0;
-		}
-
-		*type = binop->type;
-		*ptrlvl = binop->ptrlvl;
-
-		return 1;
-	}
-	case EUNOP: {
-		EUnop *unop = (EUnop*) unknown;
-		switch (unop->op) {
-		case UOP_SUB:
-		//fallthrough
-		case UOP_LNOT:
-		//fallthrough
-		case UOP_BNOT:
-			//fallthrough
-		{
-			if (!computeconstype(unop->expr, &unop->type, &unop->ptrlvl, typeinfo)) {
-				ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
-				return 0;
-			}
-
-			if (*ptrlvl > 0) {
-				ERR("Error the unop <%s> can't be used on a pointer.", uopstrs[unop->op]);
-				return 0;
-			}
-
-			*type = unop->type;
-			*ptrlvl = unop->ptrlvl;
-			return 1;
-		}
-		case UOP_DEREF:
-			ERR("Unexpected op <%s> at the toplevel.", uopstrs[unop->op]);
-			return 0;
-		case UOP_AT:
-			if (!computeconstype(unop->expr, &unop->type, &unop->ptrlvl, typeinfo)) {
-				ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
-				return 0;
-			}
-			*type = unop->type;
-			*ptrlvl = (++unop->ptrlvl);
-
-			return 1;
-		case UOP_SIZEOF:
-			if (!computeconstype(unop->expr, &unop->type, &unop->ptrlvl, typeinfo)) {
-				ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
-				return 0;
-			}
-			*type = unop->type;
-			*ptrlvl = unop->ptrlvl;
-
-			return 1;
-		default:
-			ERR("Unreachable unop op <%d>.", unop->op);
-			return 0;
-		}
-
-		ERR("Unreachable unop op <%d>.", unop->op);
-		return 0;
-	}
+	// 		return 1;
+	// 	default:
+	// 		ERR("Unreachable unop op <%d>.", unop->op);
+	// 		return 0;
+	// 	}
+	//
+	// 	ERR("Unreachable unop op <%d>.", unop->op);
+	// 	return 0;
+	// }
 
 	case EPAREN: {
 		EParen *paren = (EParen*) unknown;
@@ -521,14 +532,12 @@ computeconstype(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo)
 		EStruct* st = (EStruct*) unknown;
 		*type = st->ident;
 
-		int isym = searchtopdcl(&typesym, st->ident);
-		if (isym < 0) {
-			ERR("Error the struct <%s> is used by never declared.", identstr(st->ident));
+		Symbol *sym = searchtopdcl(&typesym, st->ident);
+		if (sym == NULL) {
+			ERR("The struct <%s> is used but never declared.", identstr(st->ident));
 			return 0;
 		}
-
-		Symbol *sym = (Symbol*) ftptr(&ftsym, typesym.array);
-		SStruct *sdecl = (SStruct*) ftptr(&ftast, sym[isym].stmt);
+		SStruct *sdecl = (SStruct*) ftptr(&ftast, sym->stmt);
 
 		EElem *elem = (EElem*) ftptr(&ftast, st->elems);
 		for (int i = 0; i < st->nelem; i++) {
@@ -583,56 +592,48 @@ analyzetype(SStruct *stmt)
 Bool
 analyzeglobalcst(SDecl *decl, int nelem)
 {
-	if (!computeconstype(decl->expr, &decl->type, &decl->ptrlvl, decl->type)) {
+	intptr type = -1;
+	int ptrlvl = 0;
+
+	if (!computeconstype(decl->expr, &type, &ptrlvl, decl->type)) {
 		ERR("Error when computing a toplevel declaration");
 		return 0;
 	}
 
+	if (decl->type != -1 && (type != decl->type || ptrlvl != decl->ptrlvl)) {
+		ERR("The type provided by the user doesn't match the computed one.");
+		ERR("<%s  ptrlvl(%d)> != <%s ptrlvl(%d)>", identstr(decl->type), decl->ptrlvl, identstr(type), ptrlvl);
+		return 0;
+	}
+
+	decl->type = type;
+	decl->ptrlvl = ptrlvl;
+
 	syminfo[nelem].type = decl->type;
 	syminfo[nelem].ptrlvl = decl->ptrlvl;
 	syminfo[nelem].ident = decl->ident;
+	syminfo[nelem].cst = decl->cst;
 
 	return 1;
 }
 
 Bool
-analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
+analyzebinop(EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
 {
-	UnknownExpr *unknown = (UnknownExpr*) ftptr(&ftast, expr);
-	switch (*unknown) {
-	case ECSTI:
-		*type = langtype2ident[I32];
-		if (typeinfo > 0) {
-			if (!islangtype(typeinfo)) {
-				ERR("The type <%s> provided by the user can't match the statement: <%s>.", identstr(typeinfo), stmtstrs[*unknown]);
-				return 0;
-			}
-			*type = typeinfo;
-		}
-		*ptrlvl = 0;
-		return 1;
-	case ECSTF:
-		*type = langtype2ident[F32];
-		if (typeinfo > 0) {
-			if (typeinfo != langtype2ident[F32] && typeinfo != langtype2ident[F64]) {
-				ERR("The type <%s> provided by the user can't match the statement: <%s>.", identstr(typeinfo), stmtstrs[*unknown]);
-				return 0;
-			}
-			*type = typeinfo;
-		}
-		*ptrlvl = 0;
-		return 1;
-	case ECSTS:
-		*type = langtype2ident[U8];
-		*ptrlvl = 1;
-		return 1;
-	case EBINOP: {
-		EBinop *binop = (EBinop*) unknown;
-		intptr type1 = -1;
-		int ptrlvl1 = -1;
+	intptr type1 = -1;
+	int ptrlvl1 = 0;
 
-		intptr type2 = -1;
-		int ptrlvl2 = -1;
+	intptr type2 = -1;
+	int ptrlvl2 = 0;
+
+	switch (binop->op) {
+	// accepts all kind of system type.
+	case OP_MUL:
+	case OP_DIV:
+	case OP_MOD:
+	case OP_ADD:
+	case OP_SUB:
+		TODO("Normal ops");
 
 		if (!analyzefunexpr(binop->left, &type1, &ptrlvl1, typeinfo, nsym)) {
 			ERR("Error when computing the type of a const declaration binop.");
@@ -651,118 +652,203 @@ analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 
 		*type = binop->type;
 		*ptrlvl = binop->ptrlvl;
+		INFO("ptrlvl: %d", *ptrlvl);
 		return 1;
-	}
-	case EUNOP: {
-		EUnop *unop = (EUnop*) unknown;
-		switch (unop->op) {
-		case UOP_SUB:
-		//fallthrough
-		case UOP_LNOT:
-		//fallthrough
-		case UOP_BNOT: {
-			if (!analyzefunexpr(unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
-				ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
-				return 0;
-			}
 
-			if (*ptrlvl > 0) {
-				ERR("Error the unop <%s> can't be used on a pointer.", uopstrs[unop->op]);
-				return 0;
-			}
-
-			*type = unop->type;
-			*ptrlvl = unop->ptrlvl;
-			return 1;
-		}
-		case UOP_DEREF:
-			if (!analyzefunexpr(unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
-				ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
-				return 0;
-			}
-
-			if (unop->ptrlvl < 1) {
-				ERR("Trying to deref a non ptr.");
-				return 0;
-			}
-
-			*type = unop->type;
-			*ptrlvl = (--unop->ptrlvl);
-
-			return 1;
-		case UOP_AT:
-			if (!analyzefunexpr(unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
-				ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
-				return 0;
-			}
-			*type = unop->type;
-			*ptrlvl = (++unop->ptrlvl);
-
-			return 1;
-		case UOP_SIZEOF:
-			if (!analyzefunexpr(unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
-				ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
-				return 0;
-			}
-			*type = unop->type;
-			*ptrlvl = unop->ptrlvl;
-
-			return 1;
-		default:
-			ERR("Unreachable unop op <%d>.", unop->op);
+	// makes boolean, ensure that both have the same type.
+	case OP_LT:
+	case OP_GT:
+	case OP_LE:
+	case OP_GE:
+	case OP_EQUAL:
+	case OP_NEQUAL:
+	case OP_LAND:
+	case OP_LOR:
+	case OP_BNOT:
+	case OP_LNOT:
+		TODO("compare ops");
+		if (!analyzefunexpr(binop->left, &type1, &ptrlvl1, -1, nsym)) {
+			ERR("Error when computing the type of a const declaration binop.");
 			return 0;
 		}
 
+		if (!analyzefunexpr(binop->right, &type2, &ptrlvl2, -1, nsym)) {
+			ERR("Error when computing the type of a const declaration binop.");
+			return 0;
+		}
+
+		if (!islangtype(type1) || !islangtype(type2)) {
+			ERR("Error, binops can only be done on the language types.");
+			TODO("Verify if it's a ptr...");
+			return 0;
+		}
+
+
+		if (type1 != type2 || ptrlvl1 != ptrlvl2) {
+			ERR("Impossible to compare two things with a different types.");
+			ERR("<%s  ptrlvl(%d)> != <%s ptrlvl(%d)>", identstr(type1), ptrlvl1, identstr(type2), ptrlvl2);
+			return 0;
+		}
+
+		binop->type = langtype2ident[BOOL];
+		binop->ptrlvl = 0;
+
+		*type = binop->type;
+		*ptrlvl = binop->ptrlvl;
+		INFO("ptrlvl: %d", *ptrlvl);
+		return 1;
+
+	// bit ops
+	case OP_LSHIFT:
+	case OP_RSHIFT:
+	case OP_BAND:
+	case OP_BXOR:
+	case OP_BOR:
+		TODO("Bit ops");
+		if (!analyzefunexpr(binop->left, &type1, &ptrlvl1, typeinfo, nsym)) {
+			ERR("Error when computing the type of a const declaration binop.");
+			return 0;
+		}
+
+		if (!analyzefunexpr(binop->right, &type2, &ptrlvl2, typeinfo, nsym)) {
+			ERR("Error when computing the type of a const declaration binop.");
+			return 0;
+		}
+
+		if (!promotion(type1, ptrlvl1, type2, ptrlvl2, &binop->type, &binop->ptrlvl)) {
+			ERR("Error when promoting the type of a const declaration binop.");
+			return 0;
+		}
+
+		if (!islangtype(binop->type)) {
+			ERR("Error, binops can only be done on the language types.");
+			TODO("Verify if it's a ptr...");
+			return 0;
+		}
+
+		LangType ltype = ident2langtype[binop->type - typeoffset];
+		if (ltype == F32 || ltype == F64 || ltype == BOOL) {
+			ERR("Can't performe a bit op on a <%s>.", langtypestr[ltype]);
+			return 0;
+		}
+
+		*type = binop->type;
+		*ptrlvl = binop->ptrlvl;
+		INFO("ptrlvl: %d", *ptrlvl);
+		return 1;
+
+
+	default:
+		ERR("Unreachable op <%s>.", opstrs[binop->op]);
+		return 0;
+	}
+
+	ERR("Unreachable code.");
+	return 0;
+}
+
+Bool
+analyzeunop(EUnop *unop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
+{
+	switch (unop->op) {
+	case UOP_SUB:
+	//fallthrough
+	case UOP_LNOT:
+	//fallthrough
+	case UOP_BNOT: {
+		if (!analyzefunexpr(unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
+			ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
+			return 0;
+		}
+
+		if (*ptrlvl > 0) {
+			ERR("Error the unop <%s> can't be used on a pointer.", uopstrs[unop->op]);
+			return 0;
+		}
+
+		*type = unop->type;
+		*ptrlvl = unop->ptrlvl;
+		return 1;
+	}
+	case UOP_DEREF:
+		if (!analyzefunexpr(unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
+			ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
+			return 0;
+		}
+
+		if (unop->ptrlvl < 1) {
+			ERR("Trying to deref a non ptr.");
+			return 0;
+		}
+
+		*type = unop->type;
+		*ptrlvl = (--unop->ptrlvl);
+
+		return 1;
+	case UOP_AT:
+		if (!analyzefunexpr(unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
+			ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
+			return 0;
+		}
+		*type = unop->type;
+		*ptrlvl = (++unop->ptrlvl);
+
+		return 1;
+	case UOP_SIZEOF:
+		if (!analyzefunexpr(unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
+			ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
+			return 0;
+		}
+		*type = unop->type;
+		*ptrlvl = unop->ptrlvl;
+
+		return 1;
+	default:
 		ERR("Unreachable unop op <%d>.", unop->op);
 		return 0;
 	}
-	case EPAREN: {
-		EParen *paren = (EParen*) unknown;
-		if (!analyzefunexpr(paren->expr, &paren->type, &paren->ptrlvl, typeinfo, nsym)) {
-			ERR("Error when computing a paren type.");
+
+	ERR("Unreachable code.");
+	return 0;
+}
+
+Bool
+analyzestruct(EStruct *st, intptr *type, int nsym)
+{
+	*type = st->ident;
+
+	Symbol *sym = searchtopdcl(&typesym, st->ident);
+	if (sym == NULL) {
+		ERR("The struct <%s> is used but never declared.", identstr(st->ident));
+		return 0;
+	}
+	SStruct *sdecl = (SStruct*) ftptr(&ftast, sym->stmt);
+
+	EElem *elem = (EElem*) ftptr(&ftast, st->elems);
+	for (int i = 0; i < st->nelem; i++) {
+		SMember* m = getstructfield(sdecl, elem->ident);
+		if (m == NULL) {
+			ERR("Error, unknown identifier <%s> in the struct <%s>", identstr(elem->ident), identstr(sdecl->ident));
 			return 0;
 		}
 
-		*type = paren->type;
-		*ptrlvl = paren->ptrlvl;
-		return 1;
-	}
-	case ESTRUCT: {
-		EStruct* st = (EStruct*) unknown;
-		*type = st->ident;
-
-		int isym = searchtopdcl(&typesym, st->ident);
-		if (isym < 0) {
-			ERR("Error the struct <%s> is used by never declared.", identstr(st->ident));
+		if (!analyzefunexpr(elem->expr, &elem->type, &elem->ptrlvl, m->type, nsym)) {
+			ERR("Error when computing the type of a struct expression.");
 			return 0;
 		}
 
-		Symbol *sym = (Symbol*) ftptr(&ftsym, typesym.array);
-		SStruct *sdecl = (SStruct*) ftptr(&ftast, sym[isym].stmt);
-
-		EElem *elem = (EElem*) ftptr(&ftast, st->elems);
-		for (int i = 0; i < st->nelem; i++) {
-			SMember* m = getstructfield(sdecl, elem->ident);
-			if (m == NULL) {
-				ERR("Error, unknown identifier <%s> in the struct <%s>", identstr(elem->ident), identstr(sdecl->ident));
-				return 0;
-			}
-
-			if (!analyzefunexpr(elem->expr, &elem->type, &elem->ptrlvl, m->type, nsym)) {
-				ERR("Error when computing the type of a struct expression.");
-				return 0;
-			}
-
-			if (m->type != elem->type || m->ptrlvl != elem->ptrlvl) {
-				ERR("The struct field <%s.%s> needs <%s> but it found <%s>", identstr(st->ident), identstr(elem->ident), identstr(m->type), identstr(elem->type));
-				return 0;
-			}
-			elem++;
+		if (m->type != elem->type || m->ptrlvl != elem->ptrlvl) {
+			ERR("The struct field <%s.%s> needs <%s> but it found <%s>", identstr(st->ident), identstr(elem->ident), identstr(m->type), identstr(elem->type));
+			return 0;
 		}
-		return 1;
+		elem++;
 	}
-	case ECALL: {
-		ECall *call = (ECall*) unknown;
+	return 1;
+}
+
+Bool
+analyzecall(ECall *call, intptr *type, int *ptrlvl, int nsym)
+{
 		Mem* expr = (Mem*) ftptr(&ftast, call->expr);
 
 		if (expr->kind != EMEM) {
@@ -770,14 +856,12 @@ analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 			return 0;
 		}
 
-		int idx = searchtopdcl(&funsym, expr->addr);
-		if (idx == -1) {
+		Symbol *sym = searchtopdcl(&funsym, expr->addr);
+		if (sym == NULL) {
 			ERR("The function <%s> is called but never declared.", identstr(expr->addr));
 			return 0;
 		}
-
-		Symbol *sym = (Symbol*) ftptr(&ftsym, funsym.array);
-		SFun *stmt = (SFun*) ftptr(&ftast, sym[idx].stmt);
+		SFun *stmt = (SFun*) ftptr(&ftast, sym->stmt);
 		assert(stmt->kind == SFUN);
 
 		call->type = stmt->type;
@@ -808,6 +892,116 @@ analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 		}
 		TODO("OK for ECALL");
 		return 1;
+}
+
+Bool
+analyzeaccess(EAccess *ac, intptr *type, int *ptrlvl, int nsym)
+{
+	TODO("analyzeaccess");
+
+	intptr structtype = -1;
+	int structptrlvl = 0;
+
+	analyzefunexpr(ac->expr, &structtype, &structptrlvl, -1, nsym);
+	if (islangtype(structtype)) {
+		ERR("There is no field in the langtype.");
+		return 0;
+	}
+
+	if (structptrlvl != 0) {
+		ERR("Accessing of the field of a struct pointer is forbidden. Derefence it before.");
+		return 0;
+	}
+
+	Symbol *s = searchtopdcl(&typesym, structtype);
+	assert(s != NULL);
+
+	SStruct* st = (SStruct*) ftptr(&ftast, s->stmt);
+	assert(st != NULL);
+
+	SMember *sm = searchmember(st->members, st->nmember, ac->ident);
+	if (sm == NULL) {
+		ERR("Access to a field that doesn't exist <%s.%s>.", identstr(st->ident), identstr(ac->ident));
+		return 0;
+	}
+
+	ac->type = sm->type;
+	ac->ptrlvl = sm->ptrlvl;
+	*type = ac->type;
+	*ptrlvl = ac->ptrlvl;
+
+	return 1;
+}
+
+Bool
+analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
+{
+	int res = 0;
+	UnknownExpr *unknown = (UnknownExpr*) ftptr(&ftast, expr);
+	switch (*unknown) {
+	case ECSTI:
+		*type = langtype2ident[I32];
+		if (typeinfo > 0) {
+			if (!islangtype(typeinfo)) {
+				ERR("The type <%s> provided by the user can't match the expression type: <%s>.", identstr(typeinfo), exprstrs[*unknown]);
+				return 0;
+			}
+			if (typeinfo == langtype2ident[F32] || typeinfo == langtype2ident[F64]) {
+				ERR("The type <%s> provided by the user can't match the expression type: <%s>.", identstr(typeinfo), exprstrs[*unknown]);
+				return 0;
+			}
+			*type = typeinfo;
+		}
+		*ptrlvl = 0;
+		return 1;
+	case ECSTF:
+		*type = langtype2ident[F32];
+		if (typeinfo > 0) {
+			if (typeinfo != langtype2ident[F32] && typeinfo != langtype2ident[F64]) {
+				ERR("The type <%s> provided by the user can't match the expression type: <%s>.", identstr(typeinfo), exprstrs[*unknown]);
+				return 0;
+			}
+			*type = typeinfo;
+		}
+		*ptrlvl = 0;
+		return 1;
+	case ECSTS:
+		*type = langtype2ident[U8];
+		*ptrlvl = 1;
+		return 1;
+	case EBINOP: {
+		EBinop *binop = (EBinop*) unknown;
+		res = analyzebinop(binop, type, ptrlvl, typeinfo, nsym);
+		binop->ptrlvl = *ptrlvl;
+		binop->type = *type;
+		return res;
+	}
+	case EUNOP: {
+		EUnop *unop = (EUnop*) unknown;
+		res = analyzeunop(unop, type, ptrlvl, typeinfo, nsym);
+		unop->ptrlvl = *ptrlvl;
+		unop->type = *type;
+		return res;
+	}
+	case EPAREN: {
+		EParen *paren = (EParen*) unknown;
+		if (!analyzefunexpr(paren->expr, &paren->type, &paren->ptrlvl, typeinfo, nsym)) {
+			ERR("Error when computing a paren type.");
+			return 0;
+		}
+
+		*type = paren->type;
+		*ptrlvl = paren->ptrlvl;
+		return 1;
+	}
+	case ESTRUCT: {
+		EStruct* st = (EStruct*) unknown;
+		*ptrlvl = 0;
+		return analyzestruct(st, type, nsym);
+	}
+	case ECALL: {
+		ECall *call = (ECall*) unknown;
+		return analyzecall(call, type, ptrlvl, nsym);
 	}
 	case EMEM: {
 		Mem *mem = (Mem*) unknown;
@@ -815,11 +1009,16 @@ analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 
 		if (sym == NULL) {
 			ERR("Use of the identifier <%s> which has never been declared.", identstr(mem->addr));
+			return 0;
 		}
 
 		*type = sym->type;
 		*ptrlvl = sym->ptrlvl;
 		return 1;
+	}
+	case EACCESS: {
+		EAccess *ac = (EAccess*) unknown;
+		return analyzeaccess(ac, type, ptrlvl, nsym);
 	}
 
 	default:
@@ -840,13 +1039,11 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 
 		SSeq* seq = (SSeq*) unknown;
 
-		ERR("seq->stmt: %d", seq->stmt);
 		if (!analyzefunstmt(fun, nsym, block, seq->stmt)) {
 			ERR("Error when analyzing a seq in a function.");
 			return 0;
 		}
 
-		ERR("seq->next: %d", seq->nxt);
 		if (!analyzefunstmt(fun, nsym, block, seq->nxt)) {
 			ERR("Error when analyzing a seq in a function.");
 			return 0;
@@ -890,6 +1087,11 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 		SIf* _if = (SIf*)unknown;
 		if (!analyzefunexpr(_if->cond, &type, &ptrlvl, -1, *nsym)) {
 			ERR("Error when analyzing the condition of a if.");
+			return 0;
+		}
+
+		if (type != langtype2ident[BOOL] ||  ptrlvl != 0) {
+			ERR("Error the if expression must be a bool expression.");
 			return 0;
 		}
 
@@ -951,6 +1153,11 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 			return 0;
 		}
 
+		if (type != langtype2ident[BOOL] ||  ptrlvl != 0) {
+			ERR("Error the for expression must be a bool expression.");
+			return 0;
+		}
+
 		newblock = newnsym;
 		if (!analyzefunstmt(fun, &newnsym, newblock, f->forstmt)) {
 			ERR("Error when analyzing the body stmt of a for.");
@@ -963,14 +1170,12 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 
 		SCall *call = (SCall*) unknown;
 
-		int idx = searchtopdcl(&funsym, call->ident);
-		if (idx == -1) {
+		Symbol *sym = searchtopdcl(&funsym, call->ident);
+		if (sym == NULL) {
 			ERR("The function <%s> is called but never declared.", identstr(call->ident));
 			return 0;
 		}
-
-		Symbol *sym = (Symbol*) ftptr(&ftsym, funsym.array);
-		SFun *stmt = (SFun*) ftptr(&ftast, sym[idx].stmt);
+		SFun *stmt = (SFun*) ftptr(&ftast, sym->stmt);
 		assert(stmt->kind == SFUN);
 
 		if (stmt->nparam != call->nparam) {
@@ -1002,6 +1207,12 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 		SymInfo *sym = searchsyminfo(*nsym, a->ident);
 		if (sym == NULL) {
 			ERR("Use of the identifier <%s> which has never been declared.", identstr(a->ident));
+			return 0;
+		}
+
+		if (sym->cst) {
+			ERR("Trying to change the value of the <%s> constant.", identstr(sym->ident));
+			return 0;
 		}
 
 		intptr type = -1;
