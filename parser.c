@@ -121,7 +121,6 @@ const char *exprstrs[NEXPR] = {
 	[EBINOP]  = "EBINOP",
 	[EUNOP]   = "EUNOP",
 	[ECALL]   = "ECALL",
-	[EPAREN]  = "EPAREN",
 	[EACCESS] = "EACCESS",
 	[ESUBSCR] = "ESUBSCR",
 	[ESTRUCT] = "ESTRUCT",
@@ -413,19 +412,6 @@ printexpr(FILE* fd, intptr expr)
 		}
 		fprintf(fd, ") : ");
 		int ptrlvl = call->ptrlvl;
-		while (ptrlvl -- > 0) {
-			fprintf(fd, "^");
-		}
-		fprintf(fd, "%s", type);
-		return;
-	}
-	case EPAREN: {
-		EParen *paren = (EParen*) ptr;
-		char* type = TYPESTR(paren->type);
-		fprintf(fd, "%s(", exprstrs[*ptr]);
-		printexpr(fd, paren->expr);
-		fprintf(fd, ") : ");
-		int ptrlvl = paren->ptrlvl;
 		while (ptrlvl -- > 0) {
 			fprintf(fd, "^");
 		}
@@ -919,7 +905,7 @@ parse_stmt_block(const ETok *t, intptr *stmt)
 	return i;
 }
 
-static const ETok assigneoe[] = { 
+static const ETok assigneoe[] = {
 	ASSIGN, BAND_ASSIGN, BOR_ASSIGN,
 	BXOR_ASSIGN, BNOT_ASSIGN, LAND_ASSIGN,
 	LOR_ASSIGN, LSHIFT_ASSIGN, RSHIFT_ASSIGN,
@@ -1339,25 +1325,14 @@ parse_direct(const ETok *t, const ETok *eoe, intptr *expr)
 	case LPAREN: {
 		i++;
 		const ETok eoeparen[] = {RPAREN, UNDEFINED};
-		// Alloc paren
-		intptr paddr = ftalloc(&ftast, sizeof(EParen));
-		*expr = paddr;
-		intptr in = -1;
 
 		// Parse the expression
-		res = parse_expression(t + i, eoeparen, &in);
+		res = parse_expression(t + i, eoeparen, expr);
 		if (res < 0) {
 			ERR("Error when parsing expression `( expr `)`");
 			return -1;
 		}
 		i += res;
-
-		// Save paren
-		EParen *paren = (EParen*) ftptr(&ftast, paddr);
-		paren->kind = EPAREN;
-		paren->expr = in;
-		paren->type = -1;
-		paren->ptrlvl = 0;
 
 		// Consume RPAREN
 		i++;

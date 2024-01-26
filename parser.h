@@ -133,7 +133,6 @@ typedef enum {
 	EBINOP,
 	EUNOP,
 	ECALL,
-	EPAREN,
 	EACCESS,
 	ESUBSCR,
 	ESTRUCT,
@@ -211,13 +210,6 @@ typedef struct {
 	intptr type;
 	int    ptrlvl;
 } ECall;
-
-typedef struct {
-	EExpr  kind;
-	intptr expr;
-	intptr type;
-	int    ptrlvl;
-} EParen;
 
 typedef struct {
 	EExpr  kind;
