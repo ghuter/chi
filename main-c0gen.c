@@ -186,7 +186,7 @@ main(int argc, char *argv[])
 		assert(analyzeglobalcst(decl, nsym));
 		nsym++;
 	}
-	printsymbolsinfo(nsym);
+	/* printsymbolsinfo(nsym); */
 
 	Symbol *symf = (Symbol*) ftptr(&ftsym, funsym.array);
 	for (int i = 0; i < funsym.nsym; i++) {
@@ -194,9 +194,9 @@ main(int argc, char *argv[])
 		assert(analyzefun(fun, nsym));
 	}
 
-	printsymbols(&typesym);
-	printsymbols(&identsym);
-	printsymbols(&funsym);
+	/* printsymbols(&typesym); */
+	/* printsymbols(&identsym); */
+	/* printsymbols(&funsym); */
 
 
 	// -------------------- C0 Generation
@@ -206,7 +206,6 @@ main(int argc, char *argv[])
 	code = ftptr(&ftcode, idx);
 	size_t sz = gen(code, typesym, identsym, funsym);
 	/* dump to stdout */
-	fprintf(stderr, "code written, size: %ld\n", sz);
 	write(1, code, sz);
 }
 
