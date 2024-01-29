@@ -327,6 +327,16 @@ peek(void)
 	c = peekc();
 	forward();
 
+	if (c == '/') {
+		if (peekc() == '/') {
+			do {
+				forward();
+				c = peekc();
+			}  while (c != '\n' && c != EOF);
+			forward();
+		}
+	}
+
 	switch (c) {
 	case EOF:
 		tok.type = EOI;
