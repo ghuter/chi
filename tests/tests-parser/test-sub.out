@@ -1,0 +1,3 @@
+const SDECL(x, ESUBSCR(EMEM(tab)[ECSTI(1)]) : ) : ?
+const SDECL(y, ESUBSCR(EMEM(tab)[EMEM(x)]) : ) : ?
+const SDECL(z, ESUBSCR(EMEM(tab)[EBINOP(ADD, EMEM(a), EBINOP(MUL, EMEM(b), EMEM(c)) : ?) : ?]) : ) : ?

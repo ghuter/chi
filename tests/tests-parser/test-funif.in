@@ -1,0 +1,13 @@
+putsCategory :: fun (age: u8) {
+	if i < 4 {
+		puts("Baby");
+	} else if i < 10 {
+		puts("Child");
+	} else if i < 20 {
+		puts("Teen");
+	} else if i < 65 {
+		puts("Adult");
+	} else {
+		puts("Senior");
+	}
+}

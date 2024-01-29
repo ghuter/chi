@@ -59,8 +59,8 @@ main(int argc, char *argv[])
 			fprintf(stderr, "Error when parsing toplevel stmt.\n");
 			return 1;
 		}
-		printstmt(stderr, stmt);
-		fprintf(stderr, "\n");
+		printstmt(stdout, stmt);
+		fprintf(stdout, "\n");
 		i += res;
 	}
 }

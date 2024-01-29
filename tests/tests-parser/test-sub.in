@@ -1,0 +1,3 @@
+x :: tab[1];
+y :: tab[x];
+z :: tab[a + b * c];

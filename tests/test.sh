@@ -1,6 +1,9 @@
 #!/bin/sh
 
-test_dir=tests
+test_exe=$1
+test_dir=$2
+
+echo "Test $test_exe on $test_dir:"
 
 # Loop through all the input files
 find "$test_dir" -type f -name "test-*.in" | while read -r infile; do
@@ -13,7 +16,7 @@ find "$test_dir" -type f -name "test-*.in" | while read -r infile; do
     errfile=$test_dir/$base_name.err
 
     # Run lex on the input file
-    printf '%s' "$(cat "$infile")" | ./lexer > "$resfile"
+    printf '%s' "$(cat "$infile")" | "$test_exe" > "$resfile"
 
     # Compare lex output with the content of the corresponding .out file
     diff "$outfile" "$resfile" > "$errfile"

@@ -53,10 +53,12 @@ clean:
 	rm -f tests/*.res
 
 tests: $(BIN)
-	sh tests/test-lex.sh
+	sh tests/test.sh ./lexer tests/tests-lexer/
+	sh tests/test.sh ./parser tests/tests-parser/
 
 rebuild-test:
-	sh tests/build-test-lex.sh
+	sh tests/build-test.sh ./lexer tests/tests-lexer/
+	sh tests/build-test.sh ./parser tests/tests-parser/
 
 .PHONY: all clean format rebuild-test
 

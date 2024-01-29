@@ -1,0 +1,1 @@
+SFUN(add, a : i32, b : i32, {SRETURN(EBINOP(ADD, EMEM(a), EMEM(b)) : ?)}) : i32

@@ -1,0 +1,3 @@
+const SDECL(x, EACCESS(EMEM(pts).x) : ?) : ?
+const SDECL(y, EACCESS(EMEM(pts).y) : ?) : ?
+const SDECL(sum, EBINOP(ADD, EACCESS(EMEM(pts).x) : ?, EACCESS(EMEM(pts).y) : ?) : ?) : ?

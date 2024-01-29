@@ -3,7 +3,7 @@ parser
 analyzer
 mapper
 *.o
-tests/*.res
-tests/*.err
+tests/*/*.res
+tests/*/*.err
 *.swp
 tags

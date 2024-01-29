@@ -1,0 +1,3 @@
+x :: pts.x;
+y :: pts.y;
+sum :: pts.x + pts.y;

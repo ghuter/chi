@@ -1,0 +1,4 @@
+const SDECL(a, ECSTI(10)) : ?
+const SDECL(b, ECSTS(Hello)) : ?
+const SDECL(c, ECSTF(1.000000)) : ?
+const SDECL(d, ESTRUCT(Point { <x : ECSTI(0)> <y : ECSTI(0)> })) : ?

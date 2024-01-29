@@ -1,0 +1,2 @@
+const SDECL(x, EBINOP(SUB, EACCESS(ECALL(EMEM(f1)) : ?.x) : ?, ESUBSCR(ECALL(EMEM(f2)) : ?[ECSTI(1)]) : ) : ?) : ?
+const SDECL(y, EACCESS(ESUBSCR(EACCESS(ECALL(EMEM(f3)) : ?.tab) : ?[EMEM(x)]) : .fst) : ?) : ?

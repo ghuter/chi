@@ -1,0 +1,1 @@
+SFUN(hello, {SFOR(SDECL(i, ECSTI(0)) : ?, EBINOP(LT, EMEM(i), ECSTI(10)) : ?, SASSIGN(i, EBINOP(ADD, EMEM(i), ECSTI(1)) : ?), SCALL(puts, ECSTS(Hello world!)))}) : void
