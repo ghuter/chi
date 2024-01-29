@@ -55,9 +55,6 @@ clean:
 tests: $(BIN)
 	sh tests/test-lex.sh
 
-debug: OFLAGS = -DDEBUG
-debug: all
-
 rebuild-test:
 	sh tests/build-test-lex.sh
 
