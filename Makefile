@@ -3,9 +3,13 @@
 
 CFLAGS = -g3 -Og -Wall -Wextra -pedantic -I./lib
 
-BIN = lexer parser analyzer mapper c0
+BIN = lexer parser analyzer mapper c0 gen
 
 all: $(BIN)
+
+GEN_OBJ = fatarena.o map.o token.o lex.o parser.o analyzer.o gen.o
+gen: $(GEN_OBJ)
+	$(CC) $(CFLAGS) $(LDFLAGS) main-c0gen.c -o $@ $(GEN_OBJ)
 
 MAIN_ANALYZER_OBJ = fatarena.o token.o map.o lex.o parser.o analyzer.o
 analyzer: $(MAIN_ANALYZER_OBJ) main-analyzer.c

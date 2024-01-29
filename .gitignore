@@ -3,6 +3,7 @@ parser
 analyzer
 mapper
 c0
+gen
 *.o
 tests/*/*.res
 tests/*/*.err
