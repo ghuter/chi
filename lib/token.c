@@ -86,6 +86,7 @@ char *tokenstrs[] = {
 	[MOD_ASSIGN]    = "MOD_ASSIGN",
 
 	[AT]            = "AT",
+	[ARROW]         = "ARROW",
 
 	[UNDEFINED]     = "UNDEFINED",
 };

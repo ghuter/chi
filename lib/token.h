@@ -59,6 +59,9 @@ typedef enum {
 	MOD_ASSIGN,
 	AT,
 
+	// Namespace use
+	ARROW,
+
 	NTOK, // must be the last of "regular tokens"
 
 	FOR,

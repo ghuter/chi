@@ -450,6 +450,9 @@ peek(void)
 		} else if (c >= '0' && c <= '9') {
 			forward();
 			tok.type = peek_dec(&idx, -1, c);
+		} else if (c == '>') {
+			forward();
+			tok.type = ARROW;
 		} else {
 			tok.type = SUB;
 		}
