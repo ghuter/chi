@@ -28,6 +28,7 @@ extern int typeoffset;
 extern FatArena ftast;
 extern FatArena ftident;
 extern FatArena ftimmed;
+extern FatArena ftlit;
 
 char *hd = 0;
 
@@ -343,12 +344,12 @@ genexpr(intptr expr)
 	}
 	case ECSTS: {
 		Csts *csts = (Csts*) ptr;
-		CODEADD("%s", (char*) ftptr(&ftimmed, csts->addr));
+		CODEADD("\"%s\"", (char*) ftptr(&ftlit, csts->addr));
 		break;
 	}
 	case EMEM: {
 		Mem *mem = (Mem*) ptr;
-		CODEADD("%s", (char*) ftptr(&ftimmed, mem->addr));
+		CODEADD("%s", (char*) ftptr(&ftident, mem->addr));
 		break;
 	}
 	case EBINOP: {
@@ -534,11 +535,10 @@ genstmt(intptr stmt)
 	}
 	case SFOR: {
 		SFor *_for = (SFor*) ptr;
-		CODEADD("for (\n\t");
+		CODEADD("for (\n");
 		genstmt(_for->stmt1);
-		CODEADD(";\n\t");
 		genexpr(_for->expr);
-		CODEADD(";\n\t");
+		CODEADD(";\n");
 		genstmt(_for->stmt2);
 		CODEADD(") {\n");
 		genstmt(_for->forstmt);
