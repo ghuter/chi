@@ -812,9 +812,9 @@ analyzecall(ECall *call, intptr *type, int *ptrlvl, int nsym)
 		return 0;
 	}
 
-	Symbol *sym = searchtopdcl(&funsym, expr->addr);
+	Symbol *sym = searchtopdcl(&funsym, expr->ident);
 	if (sym == NULL) {
-		ERR("The function <%s> is called but never declared.", identstr(expr->addr));
+		ERR("The function <%s> is called but never declared.", identstr(expr->ident));
 		return 0;
 	}
 	SFun *stmt = (SFun*) ftptr(&ftast, sym->stmt);
@@ -827,7 +827,7 @@ analyzecall(ECall *call, intptr *type, int *ptrlvl, int nsym)
 	*ptrlvl = stmt->ptrlvl;
 
 	if (stmt->nparam != call->nparam) {
-		ERR("The number of param (%d) in the function call of <%s> doesn't match with the signature (%d).", call->nparam, identstr(expr->addr), stmt->nparam);
+		ERR("The number of param (%d) in the function call of <%s> doesn't match with the signature (%d).", call->nparam, identstr(expr->ident), stmt->nparam);
 		return 0;
 	}
 
@@ -842,7 +842,7 @@ analyzecall(ECall *call, intptr *type, int *ptrlvl, int nsym)
 		}
 
 		if (type != params[i].type || ptrlvl != params[i].ptrlvl) {
-			ERR("The param type <%s of <%s> doesn't match with the signature.", identstr(params[i].ident), identstr(expr->addr));
+			ERR("The param type <%s of <%s> doesn't match with the signature.", identstr(params[i].ident), identstr(expr->ident));
 			return 0;
 		}
 	}
@@ -955,10 +955,10 @@ analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 	}
 	case EMEM: {
 		Mem *mem = (Mem*) unknown;
-		SymInfo *sym = searchsyminfo(nsym, mem->addr);
+		SymInfo *sym = searchsyminfo(nsym, mem->ident);
 
 		if (sym == NULL) {
-			ERR("Use of the identifier <%s> which has never been declared.", identstr(mem->addr));
+			ERR("Use of the identifier <%s> which has never been declared.", identstr(mem->ident));
 			return 0;
 		}
 

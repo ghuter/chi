@@ -376,7 +376,9 @@ printexpr(FILE* fd, const intptr expr)
 		return;
 	case EMEM: {
 		Mem *mem = (Mem*) ptr;
-		fprintf(fd, "%s(%s)", exprstrs[*ptr], (char*) ftptr(&ftident, mem->ident));
+		fprintf(fd, "%s(", exprstrs[*ptr]);
+		PRINTMOD(fd, mem->imod);
+		fprintf(fd, "%s", identstr(mem->ident));
 		return;
 	}
 	case EBINOP: {
@@ -1018,7 +1020,20 @@ parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 	case IDENTIFIER:
 		i++;
 		int ident = t[i];
+		int imod = -1;
 		i++;
+
+		// get optional imod
+		if (t[i] == ARROW) {
+			i++;
+			if (t[i] != IDENTIFIER) {
+				ERR("Always expects an <IDENTIFIER> after an arrow.");
+				return -1;
+			}
+			i++;
+			imod = t[i];
+			i++;
+		}
 
 		// case SASSIGN
 		if (t[i] >= ASSIGN && t[i] <= MOD_ASSIGN) {
@@ -1055,6 +1070,7 @@ parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 			break;
 		}
 
+		// case SDecl
 		res = parse_stmt_decl(t + i, eoe, ident, stmt);
 		break;
 	case IF: {
@@ -1422,10 +1438,12 @@ parse_direct(const ETok *t, const ETok *eoe, intptr *expr)
 
 		// case IDENTIFIER
 		intptr maddr = ftalloc(&ftast, sizeof(Mem));
+		*expr = maddr;
 		Mem *m = (Mem*) ftptr(&ftast, maddr);
 		m->kind = EMEM;
 		m->ident= ident;
 		m->imod = imod;
+
 		break;
 	}
 	}
