@@ -35,16 +35,27 @@ typedef EStmt UnknownStmt;
 
 typedef struct {
 	EStmt kind;
+
+	// Identifier:
 	intptr ident;
+	intptr imod;
+
+	// Type:
 	intptr type;
+	intptr tmod;
 	int ptrlvl;
+
+	// Other:
 	Bool cst;
 	intptr expr;
 } SDecl;
 
 typedef struct {
 	intptr ident;
+
+	// Type:
 	intptr type;
+	intptr tmod;
 	int ptrlvl;
 } SMember;
 
@@ -55,7 +66,11 @@ typedef struct {
 
 typedef struct {
 	EStmt kind;
+
+	// Identifier:
 	intptr ident;
+
+	// Other:
 	int nmember;
 	intptr members; // (SMember*)
 } SStruct;
@@ -63,8 +78,13 @@ typedef struct {
 typedef struct {
 	EStmt kind;
 	intptr ident;
-	intptr type; // Return type
+
+	// Return type:
+	intptr type;
+	intptr tmod;
 	int ptrlvl;
+
+	// Other:
 	int nparam;
 	intptr params; // (SMember*)
 	intptr stmt;
@@ -72,7 +92,12 @@ typedef struct {
 
 typedef struct {
 	EStmt kind;
+
+	// Identifier:
 	intptr ident;
+	intptr imod;
+
+	// Expression:
 	intptr expr;
 } SAssign;
 
@@ -104,7 +129,12 @@ typedef struct {
 
 typedef struct {
 	EStmt kind;
+
+	// Identifier:
 	intptr ident;
+	intptr imod;
+
+	// Other:
 	int nparam;
 	intptr params; // [Expr*]
 } SCall;
@@ -118,6 +148,7 @@ typedef struct {
 typedef struct {
 	EStmt kind;
 	intptr ident;
+	intptr literal; // ftlit(char*)
 } SImport;
 
 // -------------------- Expression
@@ -183,60 +214,104 @@ typedef struct {
 
 typedef Csti Cstf;
 typedef Csti Csts;
-typedef Csti Mem;
+
+typedef struct {
+	EExpr kind;
+	intptr ident;
+	intptr imod;
+} Mem;
 
 typedef struct {
 	EExpr  kind;
 	Op     op;
+
+	// Expressions:
 	intptr left;
 	intptr right;
+
+	// Type:
 	intptr type;
+	intptr tmod;
 	int    ptrlvl;
 } EBinop;
 
 typedef struct {
 	EExpr  kind;
 	Uop    op;
+
+	// Expression:
 	intptr expr;
+
+	// Type:
 	intptr type;
+	intptr tmod;
 	int    ptrlvl;
 } EUnop;
 
 typedef struct {
 	EExpr  kind;
+
+	// Expression:
 	intptr expr;
+
+	// Type:
+	intptr type;
+	intptr mod;
+	int    ptrlvl;
+
+	// Other:
 	int    nparam;
 	intptr params; // [Expr*]
-	intptr type;
-	int    ptrlvl;
 } ECall;
 
 typedef struct {
 	EExpr  kind;
+
+	// Expression:
 	intptr expr;
-	intptr ident;
+
+	// Field
+	intptr field;
+
+	// Type:
 	intptr type;
+	intptr tmod;
 	int    ptrlvl;
 } EAccess;
 
 typedef struct {
 	EExpr  kind;
+
+	// Expressions:
 	intptr expr;
 	intptr idxexpr;
+
+	// Type:
 	intptr type;
+	intptr tmod;
 	int    ptrlvl;
 } ESubscr;
 
 typedef struct {
+	// Identifier:
 	intptr ident;
+
+	// Expression:
 	intptr expr;
+
+	// Type:
 	intptr type;
+	intptr tmod;
 	int    ptrlvl;
 } EElem;
 
 typedef struct {
 	EExpr kind;
+
+	// Identifier:
 	intptr ident;
+
+	// Other:
 	int nelem;
 	intptr elems; // EElem*
 } EStruct;

@@ -85,6 +85,7 @@ do {                                                                            
 #define TOKTOOP(_t) ((_t) - MUL)
 #define TOKTOASSIGN(_t) ((_t) - ASSIGN)
 #define TYPESTR(_type) (_type == -1 ? "?" : (char*) ftptr(&ftident, _type))
+#define PRINTMOD(_fd, _mod) if (_mod > 0) fprintf(_fd, "%s->", identstr(_mod))
 #define identstr(_ident) ((char*) ftptr(&ftident, _ident))
 #define ASSIGN2OP(_t) (assigntable[_t - assign_offset])
 
@@ -176,12 +177,13 @@ static const Op assigntable[MOD_ASSIGN - ASSIGN + 1] = {
 	[MOD_ASSIGN - ASSIGN] = OP_MOD,
 };
 
-void printexpr(FILE *fd, intptr expr);
+void printexpr(FILE *fd, const intptr expr);
 static int parse_expression(const ETok *t, const ETok *eoe, intptr *expr);
 static int parse_stmt_block(const ETok *t, intptr *stmt);
-static int parse_call(const ETok *t, intptr ident, intptr *d);
+static int parse_call(const ETok *t, const intptr ident, intptr *d);
 static int parse_otherop(const ETok *t, const ETok *eoe, intptr *expr);
 static int parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt);
+static int parse_aftercall(const ETok *t, const ETok *eoe, const intptr cexpr, intptr *expr);
 
 void
 printstmt(FILE *fd, intptr stmt)
@@ -215,17 +217,21 @@ printstmt(FILE *fd, intptr stmt)
 	}
 	case SDECL: {
 		SDecl *decl = (SDecl*) ptr;
-		char *type = decl->type ==  -1 ? "?" : (char*) ftptr(&ftident, decl->type);
+		char *type = TYPESTR(decl->type);
 		if (decl->cst) {
 			fprintf(fd, "const ");
 		}
-		fprintf(fd, "%s(%s, ", stmtstrs[*ptr], (char*) ftptr(&ftident, decl->ident));
+		fprintf(fd, "%s(", stmtstrs[*ptr]);
+		PRINTMOD(fd, decl->imod);
+		fprintf(fd, "%s, ", identstr(decl->ident));
+
 		printexpr(fd, decl->expr);
 		fprintf(fd, ") : ");
 		int ptrlvl = decl->ptrlvl;
 		while (ptrlvl-- > 0) {
 			fprintf(fd, "^");
 		}
+		PRINTMOD(fd, decl->tmod);
 		fprintf(fd, "%s", type);
 		break;
 	}
@@ -241,6 +247,7 @@ printstmt(FILE *fd, intptr stmt)
 			while (ptrlvl-- > 0) {
 				fprintf(fd, "^");
 			}
+			PRINTMOD(fd, members->tmod);
 			fprintf(fd, "%s", (char*) ftptr(&ftident, members->type));
 			members++;
 		}
@@ -253,6 +260,7 @@ printstmt(FILE *fd, intptr stmt)
 		while (ptrlvl-- > 0) {
 			fprintf(fd, "^");
 		}
+		PRINTMOD(fd, fun->tmod);
 		fprintf(fd, "%s", ret);
 
 		return;
@@ -330,7 +338,7 @@ printstmt(FILE *fd, intptr stmt)
 	}
 	case SIMPORT: {
 		SImport *import = (SImport*) ptr;
-		fprintf(fd, "%s(%s)", stmtstrs[*ptr], (char*) ftptr(&ftident, import->ident));
+		fprintf(fd, "%s(%s aka %s)", stmtstrs[*ptr], identstr(import->ident), (char*) ftptr(&ftlit, import->literal));
 		break;
 	}
 	default:
@@ -340,7 +348,7 @@ printstmt(FILE *fd, intptr stmt)
 }
 
 void
-printexpr(FILE* fd, intptr expr)
+printexpr(FILE* fd, const intptr expr)
 {
 	UnknownExpr* ptr = (UnknownExpr*) ftptr(&ftast, expr);
 	switch (*ptr) {
@@ -368,7 +376,7 @@ printexpr(FILE* fd, intptr expr)
 		return;
 	case EMEM: {
 		Mem *mem = (Mem*) ptr;
-		fprintf(fd, "%s(%s)", exprstrs[*ptr], (char*) ftptr(&ftident, mem->addr));
+		fprintf(fd, "%s(%s)", exprstrs[*ptr], (char*) ftptr(&ftident, mem->ident));
 		return;
 	}
 	case EBINOP: {
@@ -415,6 +423,7 @@ printexpr(FILE* fd, intptr expr)
 		while (ptrlvl -- > 0) {
 			fprintf(fd, "^");
 		}
+		PRINTMOD(fd, call->mod);
 		fprintf(fd, "%s", type);
 		return;
 	}
@@ -424,7 +433,7 @@ printexpr(FILE* fd, intptr expr)
 		fprintf(fd, "%s(", exprstrs[*ptr]);
 		printexpr(fd, ac->expr);
 		fprintf(fd, ".");
-		fprintf(fd, "%s", (char*) ftptr(&ftident, ac->ident));
+		fprintf(fd, "%s", (char*) ftptr(&ftident, ac->field));
 		fprintf(fd, ") : ");
 		int ptrlvl = ac->ptrlvl;
 		while (ptrlvl -- > 0) {
@@ -468,15 +477,81 @@ printexpr(FILE* fd, intptr expr)
 }
 
 static int
+getidentifier(const ETok *t, intptr *ident, intptr *mod)
+{
+	int i = 0;
+
+	if (t[i] != IDENTIFIER) {
+		return 0;
+	}
+	i++;
+	*ident = t[i];
+	i++;
+
+	if (t[i] != ARROW) {
+		return i;
+	}
+	i++;
+
+	if (t[i] != IDENTIFIER) {
+		ERR("After an arrow a <IDENTIFIER> if expected.");
+		return -1;
+	}
+	i++;
+	*mod = *ident;
+	*ident = t[i];
+	i++;
+
+	return i;
+}
+
+static int
+gettype(const ETok *t, intptr *ident, intptr *mod, int *ptrlvl)
+{
+	int i = 0;
+	*ptrlvl = 0;
+
+	while (t[i] == BXOR) {
+		*ptrlvl += 1;
+		i++;
+	}
+
+	if (t[i] != IDENTIFIER) {
+		return 0;
+	}
+	i++;
+	*ident = t[i];
+	i++;
+
+	if (t[i] != ARROW) {
+		return i;
+	}
+	i++;
+
+	if (t[i] != IDENTIFIER) {
+		ERR("After an arrow a <IDENTIFIER> if expected.");
+		return -1;
+	}
+
+	i++;
+	*mod = *ident;
+	*ident = t[i];
+	i++;
+
+	return i;
+}
+
+static int
 parse_param(const ETok *t, SFun* fun)
 {
 	int i = 0;
+	int res = -1;
+
 	if (t[i] != LPAREN) {
 		ERR("ERR: Unexpected token <%s> when parsing the functions param.\n Expected `fun` `(`<param> `)`", tokenstrs[t[i]]);
 		return -1;
 	}
 	i++;
-
 
 	intptr maddr = ftalloc(&ftast, sizeof(SMember));
 	fun->params = maddr;
@@ -484,42 +559,38 @@ parse_param(const ETok *t, SFun* fun)
 	SMember* member = (SMember*) ftptr(&ftast, maddr);
 
 	while (t[i] != RPAREN) {
-		int ident = -1;
-		int type = -1;
-		int ptrlvl = 0;
+		int trash = -1;
 		fun->nparam++;
+		member->ptrlvl = 0;
+		member->tmod = -1;
 
-		if (t[i] != IDENTIFIER) {
-			ERR("Unexpected token <%s> when parsing the functions param.\n|> Expected a param: <IDENTIFIER> `:` <IDENTIFIER>", tokenstrs[t[i]]);
+
+		res = getidentifier(t + i, &member->ident, &trash);
+		if (res < 1 || trash != -1) {
+			ERR("Unexpected token <%s> when parsing the functions param.", tokenstrs[t[i]]);
+			ERR("Expected a param: <IDENTIFIER> `:` [^*] <IDENTIFIER> [`-` `>` <IDENTIFIER>]");
 			return -1;
 		}
-		i++;
-		ident = t[i];
-		i++;
+		i += res;
 
 		if (t[i] != COLON) {
-			ERR("Unexpected token <%s> when parsing the functions param.\n|> Expected a param: <IDENTIFIER> `:` <IDENTIFIER>", tokenstrs[t[i]]);
+			ERR("Unexpected token <%s> when parsing the functions param.", tokenstrs[t[i]]);
+			ERR("Expected a param: <IDENTIFIER> `:` [^*] <IDENTIFIER> [`-` `>` <IDENTIFIER>]");
 			return -1;
 		}
 		i++;
 
-		PTRLVL(t, i, type, ptrlvl);
-		if (ptrlvl == 0) {
-			if (t[i] != IDENTIFIER) {
-				ERR("Unexpected token <%s> when parsing the functions param.\n|> Expected a param: <IDENTIFIER> `:` <IDENTIFIER>", tokenstrs[t[i]]);
-				return -1;
-			}
-			i++;
-			type = t[i];
-			i++;
+		res = gettype(t + i, &member->type, &member->tmod, &member->ptrlvl);
+		if (res < 1 || trash != -1) {
+			ERR("Unexpected token <%s> when parsing the functions param.", tokenstrs[t[i]]);
+			ERR("Expected a param: <IDENTIFIER> `:` [^*] <IDENTIFIER> [`-` `>` <IDENTIFIER>]");
+			return -1;
 		}
-
-		member->type = type;
-		member->ident = ident;
-		member->ptrlvl = ptrlvl;
+		i += res;
 
 		if (t[i] != COMMA && t[i] != RPAREN) {
-			ERR("Unexpected token <%s> when parsing the functions param.\n|> Expected a `,` or `)`.", tokenstrs[t[i]]);
+			ERR("Unexpected token <%s> when parsing the functions param.", tokenstrs[t[i]]);
+			ERR("Expected a `,` or `)`.");
 			return -1;
 		}
 
@@ -564,7 +635,7 @@ parse_stmt_return(const ETok *t, const ETok *eoe, intptr *stmt)
 }
 
 static int
-parse_stmt_assignexpr(const ETok *t, const ETok *eoe, intptr *stmt, intptr left)
+parse_stmt_assignexpr(const ETok *t, const ETok *eoe, intptr left, intptr *stmt)
 {
 	int i = 0;
 	int res = -1;
@@ -619,7 +690,7 @@ parse_stmt_assignexpr(const ETok *t, const ETok *eoe, intptr *stmt, intptr left)
 }
 
 static int
-parse_stmt_assign(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident, int op)
+parse_stmt_assign(const ETok *t, const ETok *eoe, intptr ident, int op, intptr *stmt)
 {
 	int i = 0;
 	int res = -1;
@@ -643,7 +714,7 @@ parse_stmt_assign(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident, in
 
 		intptr maddr = ftalloc(&ftast, sizeof(Mem));
 		Mem *mem = (Mem*) ftptr(&ftast, maddr);
-		mem->addr = ident;
+		mem->ident = ident;
 		mem->kind = EMEM;
 		b->left = maddr;
 
@@ -671,7 +742,7 @@ parse_stmt_assign(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident, in
 }
 
 static int
-parse_stmt_call(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident)
+parse_stmt_call(const ETok *t, const ETok *eoe, intptr ident, intptr *stmt)
 {
 	int i = 0;
 	int res = -1;
@@ -701,12 +772,13 @@ parse_stmt_call(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident)
 }
 
 static int
-parse_stmt_decl(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident)
+parse_stmt_decl(const ETok *t, const ETok *eoe, intptr ident, intptr *stmt)
 {
 	int i = 0;
 	int res = -1;
 	int cst = -1;
 	int type = -1;
+	int tmod = -1;
 	int ptrlvl = 0;
 
 	if (t[i] != COLON) {
@@ -715,12 +787,12 @@ parse_stmt_decl(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident)
 	}
 	i++;
 
-	PTRLVL(t, i, type, ptrlvl);
-	if (ptrlvl == 0 && t[i] == IDENTIFIER) {
-		i++;
-		type = t[i];
-		i++;
+	res = gettype(t + i, &type, &tmod, &ptrlvl);
+	if (res < 0) {
+		ERR("Error when parsing the type of a declaration.");
+		return -1;
 	}
+	i += res;
 
 	if (t[i] == COLON) {
 		i++;
@@ -741,6 +813,7 @@ parse_stmt_decl(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident)
 	decl->cst = cst;
 	decl->type = type;
 	decl->ident = ident;
+	decl->tmod = tmod;
 	decl->ptrlvl = ptrlvl;
 
 	res = parse_expression(t + i, eoe, &decl->expr);
@@ -935,7 +1008,7 @@ parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 		}
 		i += res;
 
-		res = parse_stmt_assignexpr(t + i, eoe, stmt, expr);
+		res = parse_stmt_assignexpr(t + i, eoe, expr, stmt);
 		if (res < 0) {
 			ERR("Error when parsing the left part of an assign.");
 			return -1;
@@ -947,19 +1020,22 @@ parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 		int ident = t[i];
 		i++;
 
+		// case SASSIGN
 		if (t[i] >= ASSIGN && t[i] <= MOD_ASSIGN) {
 			Op op = ASSIGN2OP(t[i]);
 			i++;
-			res = parse_stmt_assign(t + i, eoe, stmt, ident, op);
+			res = parse_stmt_assign(t + i, eoe, ident, op, stmt);
 			break;
 		}
 
+		// case SCALL
 		if (t[i] == LPAREN) {
 			i++;
-			res = parse_stmt_call(t + i, eoe, stmt, ident);
+			res = parse_stmt_call(t + i, eoe, ident, stmt);
 			break;
 		}
 
+		// case SStruct
 		if (t[i] == DOT || t[i] == LBRACKETS) {
 			intptr expr = -1;
 			i -= 2;
@@ -971,7 +1047,7 @@ parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 			}
 			i += res;
 
-			res = parse_stmt_assignexpr(t + i, eoe, stmt, expr);
+			res = parse_stmt_assignexpr(t + i, eoe, expr, stmt);
 			if (res < 0) {
 				ERR("Error when parsing the left part of an assign.");
 				return -1;
@@ -979,7 +1055,7 @@ parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 			break;
 		}
 
-		res = parse_stmt_decl(t + i, eoe, stmt, ident);
+		res = parse_stmt_decl(t + i, eoe, ident, stmt);
 		break;
 	case IF: {
 		i++;
@@ -1016,6 +1092,9 @@ parse_toplevel_fun(const ETok *t, intptr ident, intptr *stmt)
 	const ETok eoe[] = {SEMICOLON, UNDEFINED};
 	int i = 0;
 	int res = -1;
+	intptr type = -1;
+	intptr tmod = -1;
+	intptr ptrlvl = -1;
 
 	intptr saddr = ftalloc(&ftast, sizeof(SFun));
 	*stmt = saddr;
@@ -1023,9 +1102,6 @@ parse_toplevel_fun(const ETok *t, intptr ident, intptr *stmt)
 	SFun *fun = (SFun*) ftptr(&ftast, saddr);
 	fun->ident = ident;
 	fun->kind = SFUN;
-	fun->type = -1;
-	fun->ptrlvl = 0;
-	fun->stmt = -1;
 
 	res = parse_param(t + i, fun);
 	if (res < 0) {
@@ -1034,11 +1110,15 @@ parse_toplevel_fun(const ETok *t, intptr ident, intptr *stmt)
 	}
 	i += res;
 
-	if (t[i] == IDENTIFIER) {
-		i++;
-		fun->type = t[i];
-		i++;
+	res = gettype(t + i, &type, &tmod, &ptrlvl);
+	if (res < 0) {
+		ERR("Error when parsing the return type of the function <%s>.", identstr(fun->ident));
+		return -1;
 	}
+	i += res;
+	fun->type = type;
+	fun->tmod = tmod;
+	fun->ptrlvl = ptrlvl;
 
 	res = parse_fun_stmt(t + i, eoe, &fun->stmt);
 	if (res < 0) {
@@ -1200,7 +1280,7 @@ err:
 }
 
 static int
-parse_struct_elem(const ETok *t, const intptr addr, intptr *expr)
+parse_struct_elem(const ETok *t, const intptr addr, const intptr imod, intptr *expr)
 {
 	static const ETok eoe[] = {COMMA, RBRACES, UNDEFINED};
 	int i = 0;
@@ -1274,28 +1354,6 @@ parse_direct(const ETok *t, const ETok *eoe, intptr *expr)
 	int res = -1;
 
 	switch (t[i]) {
-	case IDENTIFIER: {
-		i++;
-		EExpr kind = EMEM;
-		intptr addr = t[i];
-		i++;
-
-		ISTOK(t[i], eoe, res);
-		// case init a struct
-		if (!res && t[i] == LBRACES) {
-			res = parse_struct_elem(t + i, addr, expr);
-			if (res < 0) {
-				ERR("Error when parsing the elements in a struct init.");
-				return -1;
-			}
-			i += res;
-			return i;
-		}
-
-		// case IDENTIFIER
-		SAVECST(expr, kind, addr);
-		break;
-	}
 	// Cst
 	case LITERAL:
 		add++;
@@ -1339,9 +1397,37 @@ parse_direct(const ETok *t, const ETok *eoe, intptr *expr)
 		break;
 	}
 
-	default:
-		ERR("Unexpected token <%s>", tokenstrs[t[i]]);
-		return -1;
+	default: {
+		intptr ident = -1;
+		intptr imod = -1;
+
+		res = getidentifier(t + i, &ident, &imod);
+		if (res < 1) {
+			ERR("Unexpected token <%s>", tokenstrs[t[i]]);
+			return -1;
+		}
+		i += res;
+
+		ISTOK(t[i], eoe, res);
+		// case init a struct
+		if (!res && t[i] == LBRACES) {
+			res = parse_struct_elem(t + i, ident, imod, expr);
+			if (res < 0) {
+				ERR("Error when parsing the elements in a struct init.");
+				return -1;
+			}
+			i += res;
+			return i;
+		}
+
+		// case IDENTIFIER
+		intptr maddr = ftalloc(&ftast, sizeof(Mem));
+		Mem *m = (Mem*) ftptr(&ftast, maddr);
+		m->kind = EMEM;
+		m->ident= ident;
+		m->imod = imod;
+		break;
+	}
 	}
 
 	return i;
@@ -1375,7 +1461,7 @@ static const ETok tokbylvl[][LEVEL] = {
 };
 
 static int
-parse_aftercall(const ETok *t, const ETok *eoe, intptr cexpr, intptr *expr)
+parse_aftercall(const ETok *t, const ETok *eoe, const intptr cexpr, intptr *expr)
 {
 	int i = 0;
 	int res = -1;
@@ -1396,7 +1482,7 @@ parse_aftercall(const ETok *t, const ETok *eoe, intptr cexpr, intptr *expr)
 		EAccess *ac = (EAccess*) ftptr(&ftast, aaddr);
 		ac->kind = EACCESS;
 		ac->expr = cexpr;
-		ac->ident = ident;
+		ac->field = ident;
 		ac->type = -1;
 		ac->ptrlvl = 0;
 
@@ -1491,7 +1577,7 @@ parse_otherop(const ETok *t, const ETok *eoe, intptr *expr)
 		EAccess *ac = (EAccess*) ftptr(&ftast, aaddr);
 		ac->kind = EACCESS;
 		ac->expr = addr;
-		ac->ident = ident;
+		ac->field = ident;
 		ac->type = -1;
 		ac->ptrlvl = 0;
 
@@ -1619,7 +1705,7 @@ parse_unop(const ETok *t, const ETok *eoe, intptr *expr)
 }
 
 static int
-parse_binop(const ETok *t, const ETok *eoe, intptr *expr, int lvl)
+parse_binop(const ETok *t, const ETok *eoe, int lvl, intptr *expr)
 {
 	int i = 0;
 	int res = -1;
@@ -1627,7 +1713,7 @@ parse_binop(const ETok *t, const ETok *eoe, intptr *expr, int lvl)
 	intptr right = -1;
 
 	if (lvl > 1) {
-		res = parse_binop(t + i, eoe, &left, lvl - 1);
+		res = parse_binop(t + i, eoe, lvl - 1, &left);
 	} else {
 		res = parse_unop(t + i, eoe, &left);
 	}
@@ -1657,7 +1743,7 @@ parse_binop(const ETok *t, const ETok *eoe, intptr *expr, int lvl)
 
 	// Parse the right
 	i++;
-	res = parse_binop(t + i, eoe, &right, lvl);
+	res = parse_binop(t + i, eoe, lvl, &right);
 	if (res < 0) {
 		return -1;
 	}
@@ -1676,7 +1762,7 @@ parse_expression(const ETok *t, const ETok *eoe, intptr *expr)
 	int i = 0;
 	int res = -1;
 
-	res = parse_binop(t, eoe, expr, LEVEL);
+	res = parse_binop(t, eoe, LEVEL, expr);
 	if (res < 0) {
 		ERR("parse_binop");
 		return -1;
@@ -1694,13 +1780,44 @@ parse_expression(const ETok *t, const ETok *eoe, intptr *expr)
 }
 
 static int
-parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
+parse_toplevel_import(const ETok *t, intptr ident, intptr *stmt)
+{
+	int i = 0;
+	int literal = -1;
+
+	if (t[i] != LITERAL) {
+		ERR("Exepects: `import` <LITERAL> `;`");
+		return -1;
+	}
+	i++;
+	literal = t[i];
+	i++;
+
+	if (t[i] != SEMICOLON) {
+		ERR("Exepects an <SEMICOLON>: `import` <LITERAL> `;`");
+		return -1;
+	}
+	i++;
+
+	intptr iaddr = ftalloc(&ftast, sizeof(SImport));
+	*stmt = iaddr;
+	SImport *import = (SImport*) ftptr(&ftast, iaddr);
+	import->kind = SIMPORT;
+	import->ident = ident;
+	import->literal = literal;
+
+	return i;
+}
+
+static int
+parse_toplevel_decl(const ETok *t, intptr ident, intptr mod, intptr *stmt)
 {
 	int res = -1;
 	int i = 0;
 	int type = -1;
 	int cst = -1;
 	int ptrlvl = 0;
+	intptr tmod = -1;
 
 	if (t[i] != COLON) {
 		ERR("Declaration: <IDENTIFIER> : [<IDENTIFIER>] : EXPR, but found <%s>", tokenstrs[t[i]]);
@@ -1708,12 +1825,12 @@ parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
 	}
 	i++;
 
-	PTRLVL(t, i, type, ptrlvl);
-	if (ptrlvl == 0 && t[i] == IDENTIFIER) {
-		i++;
-		type = t[i];
-		i++;
+	res = gettype(t + i, &type, &tmod, &ptrlvl);
+	if (res < 0) {
+		ERR("Error when parsing type at toplevel.");
+		return -1;
 	}
+	i += res;
 
 	if (t[i] == COLON) {
 		cst = 1;
@@ -1757,6 +1874,14 @@ parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
 			return -1;
 		}
 		i += res;
+	} else if (t[i] == IMPORT) {
+		i++;
+		res = parse_toplevel_import(t + i, ident, stmt);
+		if (res < 0) {
+			ERR("Error toplevel import.");
+			return -1;
+		}
+		i += res;
 	} else { /* Expression */
 		const ETok eoe[3] = {SEMICOLON, UNDEFINED};
 		intptr expr = 0;
@@ -1777,7 +1902,9 @@ parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
 		decl->expr = expr;
 		decl->cst = cst;
 		decl->type = type;
+		decl->tmod = tmod;
 		decl->ptrlvl = ptrlvl;
+		decl->imod = mod;
 
 		if (t[i] != SEMICOLON) {
 			ERR("A top level declaration finish by a `;`.");
@@ -1791,58 +1918,22 @@ parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
 	return i;
 }
 
-static int
-parse_toplevel_import(const ETok *t, intptr *stmt)
-{
-	int i = 0;
-	int ident = -1;
-
-	if (t[i] != IDENTIFIER) {
-		ERR("Exepects an <IDENTIFIER>: `import` <IDENTIFIER> `;`");
-		return -1;
-	}
-	i++;
-	ident = t[i];
-	i++;
-
-	if (t[i] != SEMICOLON) {
-		ERR("Exepects an <SEMICOLON>: `import` <IDENTIFIER> `;`");
-		return -1;
-	}
-	i++;
-
-	intptr iaddr = ftalloc(&ftast, sizeof(SImport));
-	*stmt = iaddr;
-	SImport *import = (SImport*) ftptr(&ftast, iaddr);
-	import->kind = SIMPORT;
-	import->ident = ident;
-
-	return i;
-}
-
 int
 parse_toplevel(const ETok *t, intptr *stmt)
 {
 	int i = 0;
 	int ident = -1;
 	int res = -1;
+	int mod = -1;
 
-	switch (t[i]) {
-	case IDENTIFIER:
-		i++;
-		ident = t[i];
-		i++;
-		res = parse_toplevel_decl(t + i, ident, stmt);
-		break;
-	case IMPORT:
-		i++;
-		res = parse_toplevel_import(t + i, stmt);
-		break;
-	default:
+	res = getidentifier(t, &ident, &mod);
+	if (res < 1) {
 		ERR("Unexpected token: <%s> toplevel", tokenstrs[t[i]]);
 		return -1;
 	}
+	i += res;
 
+	res = parse_toplevel_decl(t + i, ident, mod, stmt);
 	if (res < 0) {
 		ERR("Toplevel error.");
 		return -1;

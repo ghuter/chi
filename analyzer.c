@@ -685,7 +685,7 @@ analyzebinop(EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 		LangType ltype = ident2langtype[binop->type - typeoffset];
 		if (ltype == F32 || ltype == F64 || ltype == BOOL) {
 			ERR("Incompatible op <%s> with expressions left: <%s ptrlvl(%d)>, right: <%s ptrlvl(%d)>.", opstrs[binop->op], identstr(type1), ptrlvl1, identstr(type2), ptrlvl2);
-		 	return 0;
+			return 0;
 		}
 
 		*type = binop->type;
@@ -875,9 +875,9 @@ analyzeaccess(EAccess *ac, intptr *type, int *ptrlvl, int nsym)
 	SStruct* st = (SStruct*) ftptr(&ftast, s->stmt);
 	assert(st != NULL);
 
-	SMember *sm = searchmember(st->members, st->nmember, ac->ident);
+	SMember *sm = searchmember(st->members, st->nmember, ac->field);
 	if (sm == NULL) {
-		ERR("Access to a field that doesn't exist <%s.%s>.", identstr(st->ident), identstr(ac->ident));
+		ERR("Access to a field that doesn't exist <%s.%s>.", identstr(st->ident), identstr(ac->field));
 		return 0;
 	}
 
