@@ -120,49 +120,12 @@ main(int argc, char *argv[])
 	} while (t.type != EOI);
 
 	// -------------------- Parsing
-
-	int i = 0;
 	int res = -1;
-	intptr stmt = -1;
 
-	while (tlst[i] != EOI) {
-		res = parse_toplevel(tlst + i, &stmt);
-		if (res < 0) {
-			fprintf(stderr, "Error when parsing toplevel stmt.\n");
-			return 1;
-		}
-		i += res;
-
-		UnknownStmt *stmtptr = (UnknownStmt*) ftptr(&ftast, stmt);
-		intptr ident = -1;
-		switch (*stmtptr) {
-		case SDECL: {
-			SDecl* decl = ((SDecl*) stmtptr);
-			ident = decl->ident;
-			res = inserttopdcl(&identsym, ident, stmt);
-			break;
-		}
-		case SFUN: {
-			ident = ((SFun*) stmtptr)->ident;
-			res = inserttopdcl(&funsym, ident, stmt);
-			break;
-		}
-		case SSTRUCT: {
-			ident = ((SFun*) stmtptr)->ident;
-			res = inserttopdcl(&typesym, ident, stmt);
-			break;
-		}
-		case SIMPORT: {
-			TODO("save imports");
-			break;
-		}
-		default:
-			ERR("Unreachable statement here.");
-		}
-
-		if (!res) {
-			ERR("Already declared: <%s>.", (char*) ftptr(&ftident, ident));
-		}
+	res = parse_tokens(tlst, &funsym, &identsym, &typesym);
+	if (res < 0) {
+		ERR("Error when parsing tokens.");
+		return 1;
 	}
 
 	// -------------------- Analyzing

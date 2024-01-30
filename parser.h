@@ -12,7 +12,7 @@ typedef int intptr;
 // -------------------- Statement
 
 typedef enum {
-	NOP,
+	SNOP,
 	SSEQ,
 	SSTRUCT,
 	SENUM,
@@ -28,6 +28,7 @@ typedef enum {
 	SIMPORT,
 	SBLOCK,
 	SEXPRASSIGN,
+	SSIGN,
 	NSTATEMENT,
 } EStmt;
 
@@ -119,6 +120,23 @@ typedef struct {
 	EStmt kind;
 	intptr ident;
 } SImport;
+
+typedef struct {
+	intptr type;
+	int    ptrlvl;
+} SType;
+
+typedef struct {
+	EStmt kind;
+	// Function name:
+	intptr ident;
+	// Return type:
+	intptr type;
+	int ptrlvl;
+	int nparam;
+	// Params:
+	intptr params; // SType*
+} SSign;
 
 // -------------------- Expression
 
@@ -247,11 +265,24 @@ typedef struct {
 	intptr elems; // EElem*
 } EStruct;
 
+// Symbols
+
+typedef struct {
+	intptr ident; // Char*
+	intptr stmt; // UnknownStmt*
+} Symbol;
+
+typedef struct {
+	intptr array; // Symbol*
+	int nsym;
+} Symbols;
+
 // -------------------- Functions
 
 int parse_toplevel(const ETok *t, intptr *stmt);
 void printexpr(FILE *fd, intptr expr);
 void printstmt(FILE *fd, intptr stmt);
+int parse_tokens(const ETok *t, Symbols *funsym, Symbols *identsym, Symbols *typesym);
 
 extern const char *uopstrs[UOP_NUM];
 extern const char *stmtstrs[NSTATEMENT];

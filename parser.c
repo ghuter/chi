@@ -93,7 +93,7 @@ extern FatArena ftimmed;
 extern FatArena ftlit;
 
 const char *stmtstrs[NSTATEMENT] = {
-	[NOP]         = "NOP",
+	[SNOP]         = "SNOP",
 	[SSEQ]        = "SSEQ",
 	[SSTRUCT]     = "SSTRUCT",
 	[SENUM]       = "SENUM",
@@ -107,6 +107,7 @@ const char *stmtstrs[NSTATEMENT] = {
 	[SCALL]       = "SCALL",
 	[SRETURN]     = "SRETURN",
 	[SIMPORT]     = "SIMPORT",
+	[SSIGN]       = "SSIGN",
 	[SEXPRASSIGN] = "SEXPRASSIGN",
 };
 
@@ -193,8 +194,8 @@ printstmt(FILE *fd, intptr stmt)
 	}
 
 	switch (*ptr) {
-	case NOP:
-		fprintf(fd, "NOP");
+	case SNOP:
+		fprintf(fd, "%s", stmtstrs[*ptr]);
 		break;
 	case SSTRUCT: {
 		SStruct *s = (SStruct*) ptr;
@@ -249,6 +250,31 @@ printstmt(FILE *fd, intptr stmt)
 		fprintf(fd, "}");
 		fprintf(fd, ") : ");
 
+		int ptrlvl = fun->ptrlvl;
+		while (ptrlvl-- > 0) {
+			fprintf(fd, "^");
+		}
+		fprintf(fd, "%s", ret);
+
+		return;
+	}
+	case SSIGN: {
+		SSign *fun = (SSign*) ptr;
+		char *ret = fun->type ==  -1 ? "void" : (char*) ftptr(&ftident, fun->type);
+		fprintf(fd, "%s(%s", stmtstrs[*ptr], (char*)ftptr(&ftident, fun->ident));
+
+		SMember* members = (SMember*) ftptr(&ftast, fun->params);
+		for (int i = 0; i < fun->nparam; i++) {
+			fprintf(fd, ", %s : ", (char*) ftptr(&ftident, members->ident));
+			int ptrlvl = members->ptrlvl;
+			while (ptrlvl-- > 0) {
+				fprintf(fd, "^");
+			}
+			fprintf(fd, "%s", (char*) ftptr(&ftident, members->type));
+			members++;
+		}
+
+		fprintf(fd, ") : ");
 		int ptrlvl = fun->ptrlvl;
 		while (ptrlvl-- > 0) {
 			fprintf(fd, "^");
@@ -345,7 +371,7 @@ printexpr(FILE* fd, intptr expr)
 	UnknownExpr* ptr = (UnknownExpr*) ftptr(&ftast, expr);
 	switch (*ptr) {
 	case ENONE:
-		fprintf(fd, "<NONE>");
+		fprintf(fd, "%s", exprstrs[*ptr]);
 		return;
 	case ECSTI: {
 		Csti *csti = (Csti*) ptr;
@@ -1004,8 +1030,19 @@ parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 		res = parse_stmt_block(t + i, stmt);
 		break;
 	}
-	default:
+	default: {
+		ISTOK(t[i], eoe, res);
+		if (res != 0) {
+			intptr naddr = ftalloc(&ftast, sizeof(UnknownStmt));
+			*stmt = naddr;
+			UnknownStmt *n = (UnknownStmt*) ftptr(&ftast, naddr);
+			*n = SNOP;
+			return i;
+		}
+
+		res = -1;
 		ERR("Unexepcted token <%s> in at the beginning of a statement.", tokenstrs[t[i]]);
+	}
 	}
 
 	if (res < 0) {
@@ -1029,8 +1066,8 @@ parse_toplevel_fun(const ETok *t, intptr ident, intptr *stmt)
 	*stmt = saddr;
 
 	SFun *fun = (SFun*) ftptr(&ftast, saddr);
-	fun->ident = ident;
 	fun->kind = SFUN;
+	fun->ident = ident;
 	fun->type = -1;
 	fun->ptrlvl = 0;
 	fun->stmt = -1;
@@ -1042,10 +1079,18 @@ parse_toplevel_fun(const ETok *t, intptr ident, intptr *stmt)
 	}
 	i += res;
 
-	if (t[i] == IDENTIFIER) {
+
+	PTRLVL(t, i, fun->type, fun->ptrlvl);
+	if (fun->ptrlvl == 0 && t[i] == IDENTIFIER) {
 		i++;
 		fun->type = t[i];
 		i++;
+	}
+
+	if (t[i] == SEMICOLON) {
+		fun->kind = SSIGN;
+		i++;
+		return i;
 	}
 
 	res = parse_fun_stmt(t + i, eoe, &fun->stmt);
@@ -1352,6 +1397,14 @@ parse_direct(const ETok *t, const ETok *eoe, intptr *expr)
 	}
 
 	default:
+		ISTOK(t[i], eoe, res);
+		if (res != 0) {
+			intptr naddr = ftalloc(&ftast, sizeof(UnknownExpr));
+			*expr = naddr;
+			UnknownExpr *n = (UnknownExpr*) ftptr(&ftast, naddr);
+			*n = ENONE;
+			return i;
+		}
 		ERR("Unexpected token <%s>", tokenstrs[t[i]]);
 		return -1;
 	}
@@ -1864,3 +1917,74 @@ parse_toplevel(const ETok *t, intptr *stmt)
 	return i;
 }
 
+Bool
+inserttopdcl(Symbols *syms, intptr ident, intptr stmt)
+{
+	Symbol *sym = (Symbol*) ftptr(&ftsym, syms->array);
+	for (int i = 0; i < syms->nsym; i++) {
+		if (ident == sym[i].ident) {
+			return 0;
+		}
+	}
+	sym[syms->nsym] = (Symbol) {
+		.ident = ident, .stmt = stmt
+	};
+	syms->nsym++;
+
+	return 1;
+}
+
+int
+parse_tokens(const ETok *t, Symbols *funsym, Symbols *identsym, Symbols *typesym)
+{
+	int i = 0;
+	int res = -1;
+	int stmt = -1;
+
+	while (t[i] != EOI) {
+		res = parse_toplevel(t + i, &stmt);
+		if (res < 0) {
+			fprintf(stderr, "Error when parsing toplevel stmt.\n");
+			return 1;
+		}
+		i += res;
+
+		UnknownStmt *stmtptr = (UnknownStmt*) ftptr(&ftast, stmt);
+		intptr ident = -1;
+		switch (*stmtptr) {
+		case SDECL: {
+			SDecl* decl = ((SDecl*) stmtptr);
+			ident = decl->ident;
+			res = inserttopdcl(identsym, ident, stmt);
+			break;
+		}
+		case SFUN: {
+			ident = ((SFun*) stmtptr)->ident;
+			res = inserttopdcl(funsym, ident, stmt);
+			break;
+		}
+		case SSTRUCT: {
+			ident = ((SFun*) stmtptr)->ident;
+			res = inserttopdcl(typesym, ident, stmt);
+			break;
+		}
+		case SIMPORT: {
+			TODO("save imports");
+			break;
+		}
+		default:
+			ERR("Unreachable statement here.");
+		}
+
+		if (!res) {
+			ERR("Already declared: <%s>.", (char*) ftptr(&ftident, ident));
+		}
+	}
+
+	if (t[i] != EOI) {
+		ERR("Error when parsing an entire file.");
+		return -1;
+	}
+
+	return i;
+}

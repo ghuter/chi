@@ -1,12 +1,7 @@
 #ifndef ANALYSE_H
 #define ANALYSE_H
 
-// -------------------- Symbols
-
-typedef struct {
-	intptr ident; // Char*
-	intptr stmt; // UnknownStmt*
-} Symbol;
+// -------------------- SymInfo
 
 typedef struct {
 	intptr ident;
@@ -14,11 +9,6 @@ typedef struct {
 	int    ptrlvl;
 	Bool cst;
 } SymInfo;
-
-typedef struct {
-	intptr array; // Symbol*
-	int nsym;
-} Symbols;
 
 // -------------------- System types
 

@@ -306,23 +306,6 @@ existstopdcl(Symbols *syms, intptr ident)
 }
 
 Bool
-inserttopdcl(Symbols *syms, intptr ident, intptr stmt)
-{
-	Symbol *sym = (Symbol*) ftptr(&ftsym, syms->array);
-	for (int i = 0; i < syms->nsym; i++) {
-		if (ident == sym[i].ident) {
-			return 0;
-		}
-	}
-	sym[syms->nsym] = (Symbol) {
-		.ident = ident, .stmt = stmt
-	};
-	syms->nsym++;
-
-	return 1;
-}
-
-Bool
 insertsyminfo(int nsym, int block, SDecl *decl)
 {
 	for (int i = nsym; i > block; i--) {
@@ -854,11 +837,17 @@ Bool
 analyzeaccess(EAccess *ac, intptr *type, int *ptrlvl, int nsym)
 {
 	TODO("analyzeaccess");
+	Bool res = 0;
 
 	intptr structtype = -1;
 	int structptrlvl = 0;
 
-	analyzefunexpr(ac->expr, &structtype, &structptrlvl, -1, nsym);
+	res = analyzefunexpr(ac->expr, &structtype, &structptrlvl, -1, nsym);
+	if (res == 0) {
+		ERR("Error when analyzefunexpr.");
+		return 0;
+	}
+
 	if (islangtype(structtype)) {
 		ERR("There is no field in the langtype.");
 		return 0;
