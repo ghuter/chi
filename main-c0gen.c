@@ -203,7 +203,7 @@ main(int argc, char *argv[])
 	// TODO(ghuter): c0 generation here
 	char *code = 0;
 	int idx = ftalloc(&ftcode, 1);
-	code = ftptr(&ftcode, idx);
+	code = (char*)ftptr(&ftcode, idx);
 	size_t sz = gen(code, typesym, identsym, funsym);
 	/* dump to stdout */
 	write(1, code, sz);
