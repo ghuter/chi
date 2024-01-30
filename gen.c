@@ -540,7 +540,8 @@ genstmt(intptr stmt)
 		genexpr(_for->expr);
 		CODEADD(";\n");
 		genstmt(_for->stmt2);
-		CODEADD(") {\n");
+		hd -= 2; // remove ";\n"
+		CODEADD("\n) {\n");
 		genstmt(_for->forstmt);
 		CODEADD("}\n");
 		break;
@@ -573,7 +574,21 @@ size_t
 gen(char *code, Symbols typesym, Symbols identsym, Symbols funsym)
 {
 	hd = code;
-	TODO("dump lib/c0.h to the current file");
+
+	FILE *fp = 0;
+	size_t fsz = 0;
+	fp = fopen("lib/c0.h", "r");
+	if (!fp) {
+		ERR(" Cannot open file: lib/c0.h");
+		assert(1 || "Failed to open file 'lib/c0.h'");
+	}
+	fseek(fp, 0, SEEK_END);
+	fsz = ftell(fp);
+	rewind(fp);
+	fread(hd, 1, fsz, fp);
+	hd += fsz;
+	fclose(fp);
+	CODEADD("\n\n");
 
 	Symbol *sym = (Symbol*) ftptr(&ftsym, typesym.array);
 	for (int i = 0; i < typesym.nsym; i++) {
