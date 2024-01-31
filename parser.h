@@ -183,7 +183,13 @@ typedef struct {
 
 typedef Csti Cstf;
 typedef Csti Csts;
-typedef Csti Mem;
+
+typedef struct {
+	EExpr  kind;
+	intptr addr;
+	intptr type;
+	int    ptrlvl;
+} Mem;
 
 typedef struct {
 	EExpr  kind;

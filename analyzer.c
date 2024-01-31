@@ -962,6 +962,8 @@ analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 			return 0;
 		}
 
+		mem->type = sym->type;
+		mem->ptrlvl = sym->ptrlvl;
 		*type = sym->type;
 		*ptrlvl = sym->ptrlvl;
 		return 1;

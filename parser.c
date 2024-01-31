@@ -368,7 +368,13 @@ printexpr(FILE* fd, intptr expr)
 		return;
 	case EMEM: {
 		Mem *mem = (Mem*) ptr;
-		fprintf(fd, "%s(%s)", exprstrs[*ptr], (char*) ftptr(&ftident, mem->addr));
+		char* type = TYPESTR(mem->type);
+		fprintf(fd, "%s(%s) : ", exprstrs[*ptr], (char*) ftptr(&ftident, mem->addr));
+		int ptrlvl = mem->ptrlvl;
+		while (ptrlvl -- > 0) {
+			fprintf(fd, "^");
+		}
+		fprintf(fd, "%s", type);
 		return;
 	}
 	case EBINOP: {
@@ -645,6 +651,8 @@ parse_stmt_assign(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident, in
 		Mem *mem = (Mem*) ftptr(&ftast, maddr);
 		mem->addr = ident;
 		mem->kind = EMEM;
+		mem->type = -1;
+		mem->ptrlvl = 0;
 		b->left = maddr;
 
 		expr = &b->right;
@@ -1276,7 +1284,6 @@ parse_direct(const ETok *t, const ETok *eoe, intptr *expr)
 	switch (t[i]) {
 	case IDENTIFIER: {
 		i++;
-		EExpr kind = EMEM;
 		intptr addr = t[i];
 		i++;
 
@@ -1292,8 +1299,13 @@ parse_direct(const ETok *t, const ETok *eoe, intptr *expr)
 			return i;
 		}
 
-		// case IDENTIFIER
-		SAVECST(expr, kind, addr);
+		intptr maddr = ftalloc(&ftast, sizeof(Mem));
+		*expr = maddr;
+		Mem *mem = (Mem*) ftptr(&ftast, maddr);
+		mem->addr = addr;
+		mem->kind = EMEM;
+		mem->ptrlvl = 0;
+		mem->type = -1;
 		break;
 	}
 	// Cst
