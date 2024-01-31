@@ -19,7 +19,13 @@
     } while (0)
 
 #define ERR(...) fprintf(stderr, "ERR(%d): ", __LINE__); fprintf(stderr, __VA_ARGS__), fprintf(stderr, "\n")
-#define INFO(...) fprintf(stderr, "INFO(%d): ", __LINE__); fprintf(stderr, __VA_ARGS__), fprintf(stderr, "\n")
+
+#define PRINTINFO 0
+#if PRINTINFO == 0
+#define INFO(...) do {} while (0)
+#else
+#define INFO(...) fprintf(stderr, "INFO(%d): ", __LINE__), fprintf(stderr, __VA_ARGS__), fprintf(stderr, "\n")
+#endif
 
 #define TYPESTR(_type) (_type == -1 ? "?" : (char*) ftptr(&ftident, _type))
 #define islangtype(_type) ((typeoffset <= _type) && (_type <= typeend))
@@ -32,6 +38,7 @@ extern int langtype2ident[NLANGTYPE];
 extern Symbols funsym;
 extern Symbols identsym;
 extern Symbols typesym;
+extern Symbols signatures;
 extern SymInfo *syminfo;
 
 const char* langtypestrs[NLANGTYPE] = {
@@ -277,7 +284,10 @@ printsymbolsinfo(int nsym)
 		char *type = TYPESTR(syminfo[i].type);
 		fprintf(stderr, "%s, ", type);
 	}
-	fprintf(stderr, "\n");
+
+	if (nsym > 0) {
+		fprintf(stderr, "\n");
+	}
 }
 
 Symbol*
@@ -567,7 +577,7 @@ analyzebinop(EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 	case OP_MOD:
 	case OP_ADD:
 	case OP_SUB:
-		TODO("Normal ops");
+		INFO("Normal ops");
 
 		if (!analyzefunexpr(binop->left, &type1, &ptrlvl1, typeinfo, nsym)) {
 			ERR("Error when computing the type of a const declaration binop.");
@@ -606,7 +616,7 @@ analyzebinop(EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 	case OP_LOR:
 	case OP_BNOT:
 	case OP_LNOT:
-		TODO("compare ops");
+		INFO("compare ops");
 		if (!analyzefunexpr(binop->left, &type1, &ptrlvl1, -1, nsym)) {
 			ERR("Error when computing the type of a const declaration binop.");
 			return 0;
@@ -643,7 +653,7 @@ analyzebinop(EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 	case OP_BAND:
 	case OP_BXOR:
 	case OP_BOR:
-		TODO("Bit ops");
+		INFO("Bit ops");
 		if (!analyzefunexpr(binop->left, &type1, &ptrlvl1, typeinfo, nsym)) {
 			ERR("Error when computing the type of a const declaration binop.");
 			return 0;
@@ -795,7 +805,7 @@ analyzecall(ECall *call, intptr *type, int *ptrlvl, int nsym)
 		return 0;
 	}
 
-	Symbol *sym = searchtopdcl(&funsym, expr->addr);
+	Symbol *sym = searchtopdcl(&signatures, expr->addr);
 	if (sym == NULL) {
 		ERR("The function <%s> is called but never declared.", identstr(expr->addr));
 		return 0;
@@ -829,14 +839,14 @@ analyzecall(ECall *call, intptr *type, int *ptrlvl, int nsym)
 			return 0;
 		}
 	}
-	TODO("OK for ECALL");
+	INFO("OK for ECALL");
 	return 1;
 }
 
 Bool
 analyzeaccess(EAccess *ac, intptr *type, int *ptrlvl, int nsym)
 {
-	TODO("analyzeaccess");
+	INFO("analyzeaccess");
 	Bool res = 0;
 
 	intptr structtype = -1;
@@ -976,7 +986,7 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 	UnknownStmt *unknown = (UnknownStmt*) ftptr(&ftast, stmt);
 	switch (*unknown) {
 	case SSEQ: {
-		TODO("SSEQ");
+		INFO("SSEQ");
 
 		SSeq* seq = (SSeq*) unknown;
 
@@ -993,7 +1003,7 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 		return 1;
 	}
 	case SDECL: {
-		TODO("SDECL");
+		INFO("SDECL");
 
 		intptr type;
 		int ptrlvl;
@@ -1021,7 +1031,7 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 		return 1;
 	}
 	case SIF: {
-		TODO("IF");
+		INFO("IF");
 		intptr type;
 		int ptrlvl;
 
@@ -1050,7 +1060,7 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 		return 1;
 	}
 	case SRETURN: {
-		TODO("SRETURN");
+		INFO("SRETURN");
 		SReturn *ret = (SReturn*) unknown;
 		intptr type = -1;
 		int ptrlvl = -1;
@@ -1064,12 +1074,12 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 			ERR("Error the return expression <%s: ptrlvl %d> isn't the same as the function return type <%s: ptrlvl %d>.", identstr(type), ptrlvl, identstr(fun->type), fun->ptrlvl);
 			return 0;
 		}
-		TODO("OK ret");
+		INFO("OK ret");
 
 		return 1;
 	}
 	case SFOR: {
-		TODO("SFOR");
+		INFO("SFOR");
 
 		intptr type;
 		int ptrlvl;
@@ -1107,17 +1117,17 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 		return 1;
 	}
 	case SCALL: {
-		TODO("SCALL");
+		INFO("SCALL");
 
 		SCall *call = (SCall*) unknown;
 
-		Symbol *sym = searchtopdcl(&funsym, call->ident);
+		Symbol *sym = searchtopdcl(&signatures, call->ident);
 		if (sym == NULL) {
 			ERR("The function <%s> is called but never declared.", identstr(call->ident));
 			return 0;
 		}
 		SFun *stmt = (SFun*) ftptr(&ftast, sym->stmt);
-		assert(stmt->kind == SFUN);
+		assert(stmt->kind == SFUN || stmt->kind == SSIGN);
 
 		if (stmt->nparam != call->nparam) {
 			ERR("The number of param (%d) in the function call of <%s> doesn't match with the signature (%d).", call->nparam, identstr(call->ident), stmt->nparam);
@@ -1142,7 +1152,7 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 		return 1;
 	}
 	case SASSIGN: {
-		TODO("SASSIGN");
+		INFO("SASSIGN");
 		SAssign *a = (SAssign*) unknown;
 
 		SymInfo *sym = searchsyminfo(*nsym, a->ident);
@@ -1171,7 +1181,7 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 		return 1;
 	}
 	case SEXPRASSIGN: {
-		TODO("SEXPRASSIGN");
+		INFO("SEXPRASSIGN");
 		SExprAssign *a = (SExprAssign*) unknown;
 
 		UnknownExpr *left = (UnknownExpr*) ftptr(&ftast, a->left);
@@ -1209,8 +1219,25 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 }
 
 
+static Bool
+inserttopdcl(Symbols *syms, intptr ident, intptr stmt)
+{
+	Symbol *sym = (Symbol*) ftptr(&ftsym, syms->array);
+	for (int i = 0; i < syms->nsym; i++) {
+		if (ident == sym[i].ident) {
+			return 0;
+		}
+	}
+	sym[syms->nsym] = (Symbol) {
+		.ident = ident, .stmt = stmt
+	};
+	syms->nsym++;
+
+	return 1;
+}
+
 Bool
-analyzefun(SFun *fun, int nsym)
+analyzefun(SFun *fun, intptr stmt, int nsym)
 {
 	// Verify the params
 	SMember *member = (SMember*) ftptr(&ftast, fun->params);
@@ -1228,6 +1255,17 @@ analyzefun(SFun *fun, int nsym)
 
 	if (fun->type >= 0 && !istypedefined(fun->type)) {
 		ERR("Return type <%s> used in the function <%s> but never declared", (char*) ftptr(&ftident, fun->type), (char*) ftptr(&ftident, fun->ident));
+		return 0;
+	}
+
+	switch (fun->kind) {
+	case SSIGN:
+		return 1;
+	case SFUN:
+		assert(inserttopdcl(&funsym, fun->ident, stmt) == 1);
+		break;
+	default:
+		assert(0 && "Unreachable case");
 		return 0;
 	}
 

@@ -1917,7 +1917,7 @@ parse_toplevel(const ETok *t, intptr *stmt)
 	return i;
 }
 
-Bool
+static Bool
 inserttopdcl(Symbols *syms, intptr ident, intptr stmt)
 {
 	Symbol *sym = (Symbol*) ftptr(&ftsym, syms->array);
@@ -1935,7 +1935,7 @@ inserttopdcl(Symbols *syms, intptr ident, intptr stmt)
 }
 
 int
-parse_tokens(const ETok *t, Symbols *funsym, Symbols *identsym, Symbols *typesym)
+parse_tokens(const ETok *t, Symbols *signatures, Symbols *identsym, Symbols *typesym)
 {
 	int i = 0;
 	int res = -1;
@@ -1958,14 +1958,15 @@ parse_tokens(const ETok *t, Symbols *funsym, Symbols *identsym, Symbols *typesym
 			res = inserttopdcl(identsym, ident, stmt);
 			break;
 		}
-		case SFUN: {
-			ident = ((SFun*) stmtptr)->ident;
-			res = inserttopdcl(funsym, ident, stmt);
+		case SSTRUCT: {
+			ident = ((SStruct*) stmtptr)->ident;
+			res = inserttopdcl(typesym, ident, stmt);
 			break;
 		}
-		case SSTRUCT: {
+		case SFUN: //fallthrough
+		case SSIGN: {
 			ident = ((SFun*) stmtptr)->ident;
-			res = inserttopdcl(typesym, ident, stmt);
+			res = inserttopdcl(signatures, ident, stmt);
 			break;
 		}
 		case SIMPORT: {
@@ -1978,6 +1979,7 @@ parse_tokens(const ETok *t, Symbols *funsym, Symbols *identsym, Symbols *typesym
 
 		if (!res) {
 			ERR("Already declared: <%s>.", (char*) ftptr(&ftident, ident));
+			return -1;
 		}
 	}
 

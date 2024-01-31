@@ -70,6 +70,7 @@ typedef struct {
 	intptr params; // (SMember*)
 	intptr stmt;
 } SFun;
+typedef SFun SSign;
 
 typedef struct {
 	EStmt kind;
@@ -120,23 +121,6 @@ typedef struct {
 	EStmt kind;
 	intptr ident;
 } SImport;
-
-typedef struct {
-	intptr type;
-	int    ptrlvl;
-} SType;
-
-typedef struct {
-	EStmt kind;
-	// Function name:
-	intptr ident;
-	// Return type:
-	intptr type;
-	int ptrlvl;
-	int nparam;
-	// Params:
-	intptr params; // SType*
-} SSign;
 
 // -------------------- Expression
 

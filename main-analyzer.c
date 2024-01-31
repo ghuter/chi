@@ -53,6 +53,7 @@ FatArena ftsym   = {0};
 Symbols funsym = {0};
 Symbols identsym = {0};
 Symbols typesym = {0};
+Symbols signatures = {0};
 
 SymInfo *syminfo = NULL;
 
@@ -85,9 +86,10 @@ main(int argc, char *argv[])
 
 	int pagesz = getpgsz();
 
-	identsym.array = ftalloc(&ftsym, 10 * pagesz);
-	funsym.array   = ftalloc(&ftsym, 10 * pagesz);
-	typesym.array  = ftalloc(&ftsym, 10 * pagesz);
+	identsym.array =   ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	funsym.array   =   ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	typesym.array  =   ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	signatures.array = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
 
 	// -------------------- Alloc lang types
 	int type = -1;
@@ -122,14 +124,14 @@ main(int argc, char *argv[])
 	// -------------------- Parsing
 	int res = -1;
 
-	res = parse_tokens(tlst, &funsym, &identsym, &typesym);
+	res = parse_tokens(tlst, &signatures, &identsym, &typesym);
 	if (res < 0) {
 		ERR("Error when parsing tokens.");
 		return 1;
 	}
 
 	// -------------------- Analyzing
-	intptr info = ftalloc(&ftsym, sizeof(SymInfo) * 10000);
+	intptr info = ftalloc(&ftsym, sizeof(SymInfo) * pagesz);
 	syminfo = (SymInfo*) ftptr(&ftsym, info);
 	int nsym = 0;
 
@@ -147,11 +149,11 @@ main(int argc, char *argv[])
 	}
 	printsymbolsinfo(nsym);
 
-	Symbol *symf = (Symbol*) ftptr(&ftsym, funsym.array);
-	for (int i = 0; i < funsym.nsym; i++) {
-		SFun* fun = (SFun*) ftptr(&ftast, symf[i].stmt);
-		fprintf(stderr, "fun <%s>\n", ftptr(&ftident, fun->ident));
-		assert(analyzefun(fun, nsym));
+	Symbol *symf = (Symbol*) ftptr(&ftsym, signatures.array);
+	for (int i = 0; i < signatures.nsym; i++) {
+		intptr stmt = symf[i].stmt;
+		SFun* fun = (SFun*) ftptr(&ftast, stmt);
+		assert(analyzefun(fun, stmt, nsym));
 	}
 
 	printsymbols(&typesym);
