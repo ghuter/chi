@@ -10,8 +10,8 @@
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 
-#define TODO(message) \
-    do { \
+#define TODO(message)                                         \
+    do {                                                      \
         fprintf(stderr, "TODO(%d): %s\n", __LINE__, message); \
     } while (0)
 
@@ -19,64 +19,64 @@
 
 #define BURNSEPARATORS(_t, _i)             \
 do {                                       \
-	while (1) {                            \
-		if (_t[_i] == NEWLINE) {           \
-			line++;                        \
-			_i++;                          \
-		} else if (_t[_i] == SEMICOLON) {  \
-			_i++;                          \
-		}                                  \
-		else {                             \
-			break;                         \
-		}                                  \
-	}                                      \
+    while (1) {                            \
+        if (_t[_i] == NEWLINE) {           \
+            line++;                        \
+            _i++;                          \
+        } else if (_t[_i] == SEMICOLON) {  \
+            _i++;                          \
+        }                                  \
+        else {                             \
+            break;                         \
+        }                                  \
+    }                                      \
 } while (0)
 
 #define BURNNEWLINE(_t, _i)       \
 do {                              \
-	while (_t[_i] == NEWLINE) {   \
-		_i++;                     \
-		line++;                   \
-	}                             \
+    while (_t[_i] == NEWLINE) {   \
+        _i++;                     \
+        line++;                   \
+    }                             \
 } while (0)
 
 #define ISTOK(_t, _eoe, _res)                  \
 do {                                           \
-	int _i = 0;                                \
-	_res = 0;                                  \
-	while (_eoe[_i] != UNDEFINED) {            \
-		if ((_t) == _eoe[_i]) {                \
-			_res = 1;                          \
-			break;                             \
-		}                                      \
-		_i++;                                  \
-	}                                          \
+    int _i = 0;                                \
+    _res = 0;                                  \
+    while (_eoe[_i] != UNDEFINED) {            \
+        if ((_t) == _eoe[_i]) {                \
+            _res = 1;                          \
+            break;                             \
+        }                                      \
+        _i++;                                  \
+    }                                          \
 } while (0)
 
 #define SAVECST(_dest, _kind, _addr)             \
 do {                                             \
-	intptr _tmp = ftalloc(&ftast, sizeof(Csti)); \
-	*_dest = _tmp;                               \
-	Csti *_csti = (Csti *)ftptr(&ftast, _tmp);   \
-	_csti->addr = _addr;                         \
-	_csti->kind = _kind;                         \
+    intptr _tmp = ftalloc(&ftast, sizeof(Csti)); \
+    *_dest = _tmp;                               \
+    Csti *_csti = (Csti *)ftptr(&ftast, _tmp);   \
+    _csti->addr = _addr;                         \
+    _csti->kind = _kind;                         \
 } while (0)
 
 #define PTRLVL(_t, _i, _type, _ptrlvl)                                           \
 do {                                                                             \
-	if (_t[_i] == BXOR) {                                                        \
-		while (_t[_i] == BXOR) {                                                 \
-			_ptrlvl++;                                                           \
-			_i++;                                                                \
-		}                                                                        \
-		if (_t[_i] != IDENTIFIER) {                                              \
-			ERR("Error when parsing a type, after n `^` expects <IDENTIFIER>."); \
-			return -1;                                                           \
-		}                                                                        \
-		_i++;                                                                    \
-		_type = _t[_i];                                                          \
-		_i++;                                                                    \
-	}                                                                            \
+    if (_t[_i] == BXOR) {                                                        \
+        while (_t[_i] == BXOR) {                                                 \
+            _ptrlvl++;                                                           \
+            _i++;                                                                \
+        }                                                                        \
+        if (_t[_i] != IDENTIFIER) {                                              \
+            ERR("Error when parsing a type, after n `^` expects <IDENTIFIER>."); \
+            return -1;                                                           \
+        }                                                                        \
+        _i++;                                                                    \
+        _type = _t[_i];                                                          \
+        _i++;                                                                    \
+    }                                                                            \
 } while (0)
 
 

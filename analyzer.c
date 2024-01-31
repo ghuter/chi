@@ -13,8 +13,8 @@
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 
-#define TODO(message) \
-    do { \
+#define TODO(message)                                                   \
+    do {                                                                \
         fprintf(stderr, "TODO(%s): %s\n", TOSTRING(__LINE__), message); \
     } while (0)
 
