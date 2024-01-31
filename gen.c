@@ -72,8 +72,6 @@ static const char *optype2inst[OP_NUM][NLANGTYPE] = {
 		[I32]  = "remi32",
 		[I64]  = "remi64",
 		[I128] = "remi128",
-		[F32]  = "remf32",
-		[F64]  = "remf64",
 	},
 	[OP_ADD] = {
 		[U8]   = "addu8",
@@ -258,71 +256,111 @@ static const char *optype2inst[OP_NUM][NLANGTYPE] = {
 		[F64]  = "orf64",
 	},
 	[OP_LAND] = {
-		[U8]   = "??",
-		[U16]  = "??",
-		[U32]  = "??",
-		[U64]  = "??",
-		[U128] = "??",
-		[I8]   = "??",
-		[I16]  = "??",
-		[I32]  = "??",
-		[I64]  = "??",
-		[I128] = "??",
-		[F32]  = "??",
-		[F64]  = "??",
+		[U8]   = "&&",
+		[U16]  = "&&",
+		[U32]  = "&&",
+		[U64]  = "&&",
+		[U128] = "&&",
+		[I8]   = "&&",
+		[I16]  = "&&",
+		[I32]  = "&&",
+		[I64]  = "&&",
+		[I128] = "&&",
+		[F32]  = "&&",
+		[F64]  = "&&",
 	},
 	[OP_LOR] = {
-		[U8]   = "??",
-		[U16]  = "??",
-		[U32]  = "??",
-		[U64]  = "??",
-		[U128] = "??",
-		[I8]   = "??",
-		[I16]  = "??",
-		[I32]  = "??",
-		[I64]  = "??",
-		[I128] = "??",
-		[F32]  = "??",
-		[F64]  = "??",
+		[U8]   = "||",
+		[U16]  = "||",
+		[U32]  = "||",
+		[U64]  = "||",
+		[U128] = "||",
+		[I8]   = "||",
+		[I16]  = "||",
+		[I32]  = "||",
+		[I64]  = "||",
+		[I128] = "||",
+		[F32]  = "||",
+		[F64]  = "||",
 	},
 	[OP_BNOT] = {
-		[U8]   = "??",
-		[U16]  = "??",
-		[U32]  = "??",
-		[U64]  = "??",
-		[U128] = "??",
-		[I8]   = "??",
-		[I16]  = "??",
-		[I32]  = "??",
-		[I64]  = "??",
-		[I128] = "??",
-		[F32]  = "??",
-		[F64]  = "??",
+		[U8]   = "!",
+		[U16]  = "!",
+		[U32]  = "!",
+		[U64]  = "!",
+		[U128] = "!",
+		[I8]   = "!",
+		[I16]  = "!",
+		[I32]  = "!",
+		[I64]  = "!",
+		[I128] = "!",
+		[F32]  = "!",
+		[F64]  = "!",
 	},
 	[OP_LNOT] = {
-		[U8]   = "??",
-		[U16]  = "??",
-		[U32]  = "??",
-		[U64]  = "??",
-		[U128] = "??",
-		[I8]   = "??",
-		[I16]  = "??",
-		[I32]  = "??",
-		[I64]  = "??",
-		[I128] = "??",
-		[F32]  = "??",
-		[F64]  = "??",
+		[U8]   = "!",
+		[U16]  = "!",
+		[U32]  = "!",
+		[U64]  = "!",
+		[U128] = "!",
+		[I8]   = "!",
+		[I16]  = "!",
+		[I32]  = "!",
+		[I64]  = "!",
+		[I128] = "!",
+		[F32]  = "!",
+		[F64]  = "!",
 	},
 };
 
 static const char* uop2str[UOP_NUM] = {
 	[UOP_SUB]    = "-",
-	[UOP_LNOT]   = "LNOT",
-	[UOP_BNOT]   = "BNOT",
-	[UOP_BXOR]   = "BXOR",
+	[UOP_LNOT]   = "!",
+	[UOP_BNOT]   = "!",
 	[UOP_AT]     = "&",
+	[UOP_DEREF]  = "^",
 	[UOP_SIZEOF] = "sizeof",
 };
+
+static int
+getchildtype(intptr expr)
+{
+	UnknownExpr* ptr = (UnknownExpr*) ftptr(&ftast, expr);
+	int type = -1;
+
+	#define TYPEOF(X) do{ \
+		X *e = (X*)ptr; \
+		type = ident2langtype[e->type - typeoffset]; \
+		} while(0)
+	switch (*ptr) {
+	case ECSTI:
+		return I64;
+	case ECSTF:
+		return F64;
+	case EUNOP: {
+		TYPEOF(EUnop);
+		break;
+	}
+	case ECALL: {
+		TYPEOF(ECall);
+		break;
+	}
+	case EACCESS: {
+		TYPEOF(EAccess);
+		break;
+	}
+	case ESUBSCR: {
+		TYPEOF(ESubscr);
+		break;
+	}
+	default:
+		fprintf(stderr, "default hit with: %d\n", *ptr);
+		return -1;
+	}
+	#undef TYPEOF
+
+	return type;
+}
 
 static void
 genexpr(intptr expr)
@@ -356,6 +394,20 @@ genexpr(intptr expr)
 		EBinop *binop = (EBinop*) ptr;
 		Op op = binop->op;
 		int type = ident2langtype[binop->type - typeoffset];
+		fprintf(stderr, "op: %d, binop->type: %d, type: %d, str: %s\n",
+			op, binop->type, type, optype2inst[op][type]);
+		// bool type: we want the actual operand types
+		if (type == 0) {
+			type = getchildtype(binop->left);
+			if (type <= 0)
+				type = getchildtype(binop->right);
+		}
+		fprintf(stderr, "op: %d, binop->type: %d, type: %d, str: %s\n",
+			op, binop->type, type, optype2inst[op][type]);
+		if (type <= 0) {
+			ERR("Invalid type for binop");
+			assert(1 || "Invalid type for binop");
+		}
 		CODEADD("%s(", optype2inst[op][type]);
 		genexpr(binop->left);
 		CODEADD(", ");
@@ -380,13 +432,6 @@ genexpr(intptr expr)
 			if (i != 0) CODEADD(", ");
 			genexpr(paramtab[i]);
 		}
-		CODEADD(")");
-		break;
-	}
-	case EPAREN: {
-		EParen *paren = (EParen*) ptr;
-		CODEADD("(");
-		genexpr(paren->expr);
 		CODEADD(")");
 		break;
 	}

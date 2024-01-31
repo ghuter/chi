@@ -24,21 +24,22 @@
 #define ERR(...) fprintf(stderr, "ERR(%d,%d): ", __LINE__, line); fprintf(stderr, __VA_ARGS__), fprintf(stderr, "\n")
 
 const Str langtypes[NLANGTYPE] = {
-	{(uint8_t*)"u8",   2},
-	{(uint8_t*)"u16",  3},
-	{(uint8_t*)"u32",  3},
-	{(uint8_t*)"u64",  3},
-	{(uint8_t*)"u128", 4},
-	{(uint8_t*)"i8",   2},
-	{(uint8_t*)"i16",  3},
-	{(uint8_t*)"i32",  3},
-	{(uint8_t*)"i64",  3},
-	{(uint8_t*)"i128", 4},
-	{(uint8_t*)"f32",  3},
-	{(uint8_t*)"f64",  3},
+	{(uint8_t*)"bool",   4},
+	{(uint8_t*)"u8",     2},
+	{(uint8_t*)"u16",    3},
+	{(uint8_t*)"u32",    3},
+	{(uint8_t*)"u64",    3},
+	{(uint8_t*)"u128",   4},
+	{(uint8_t*)"i8",     2},
+	{(uint8_t*)"i16",    3},
+	{(uint8_t*)"i32",    3},
+	{(uint8_t*)"i64",    3},
+	{(uint8_t*)"i128",   4},
+	{(uint8_t*)"f32",    3},
+	{(uint8_t*)"f64",    3},
 };
 
-int ident2langtype[NLANGTYPE * 3] = {-1};
+int ident2langtype[NLANGTYPE * 4] = {-1};
 int langtype2ident[NLANGTYPE]     = {-1};
 int typeoffset = -1;
 int typeend = -1;
