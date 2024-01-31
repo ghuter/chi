@@ -97,7 +97,6 @@ const char *stmtstrs[NSTATEMENT] = {
 	[SSEQ]        = "SSEQ",
 	[SSTRUCT]     = "SSTRUCT",
 	[SENUM]       = "SENUM",
-	[SINTERFACE]  = "SINTERFACE",
 	[SFUN]        = "SFUN",
 	[SDECL]       = "SDECL",
 	[SIF]         = "SIF",
@@ -1811,14 +1810,6 @@ parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
 		res = parse_toplevel_fun(t + i, ident, stmt);
 		if (res < 0) {
 			ERR("Error toplevel fun");
-			return -1;
-		}
-		i += res;
-	} else if (t[i] == INTERFACE) {
-		i++;
-		res = parse_toplevel_interface(t + i);
-		if (res < 0) {
-			ERR("Error toplevel");
 			return -1;
 		}
 		i += res;

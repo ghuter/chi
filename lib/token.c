@@ -1,22 +1,25 @@
 #include "token.h"
 
-char *keywords[] = {
+char *keywords[NKEYWORDS] = {
 	[FOR]       = "for",
 	[IF]        = "if",
 	[ELSE]      = "else",
 	[STRUCT]    = "struct",
 	[SIZEOF]    = "sizeof",
 	[RETURN]    = "return",
-	[INTERFACE] = "interface",
 	[IN]        = "in",
 	[IMPORT]    = "import",
 	[ENUM]      = "enum",
 	[FUN]       = "fun",
 	[TRUE]      = "true",
 	[FALSE]     = "false",
+	[IMPL]      = "impl",
+	[SIGNATURE] = "signature",
+	[SKELETON]  = "skeleton",
+	[DEFINE]    = "define",
 };
 
-char *tokenstrs[] = {
+char *tokenstrs[NKEYWORDS] = {
 	[EOI]           = "EOI",
 	[FOR]           = "FOR",
 	[IF]            = "IF",
@@ -24,13 +27,16 @@ char *tokenstrs[] = {
 	[STRUCT]        = "STRUCT",
 	[SIZEOF]        = "SIZEOF",
 	[RETURN]        = "RETURN",
-	[INTERFACE]     = "INTERFACE",
 	[IN]            = "IN",
 	[IMPORT]        = "IMPORT",
 	[ENUM]          = "ENUM",
 	[FUN]           = "FUN",
 	[TRUE]          = "TRUE",
 	[FALSE]         = "FALSE",
+	[IMPL]          = "IMPL",
+	[SIGNATURE]     = "SIGNATURE",
+	[SKELETON]      = "SKELETON",
+	[DEFINE]        = "DEFINE",
 
 	[INT]           = "INT",
 	[FLOAT]         = "FLOAT",

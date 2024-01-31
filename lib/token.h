@@ -67,13 +67,16 @@ typedef enum {
 	STRUCT,
 	SIZEOF,
 	RETURN,
-	INTERFACE,
 	IN,
 	IMPORT,
 	ENUM,
 	FUN,
 	TRUE,
 	FALSE,
+	IMPL,
+	SIGNATURE,
+	SKELETON,
+	DEFINE,
 	NKEYWORDS, // must be the last "keyword"
 } ETok;
 

@@ -16,7 +16,6 @@ typedef enum {
 	SSEQ,
 	SSTRUCT,
 	SENUM,
-	SINTERFACE,
 	SFUN,
 	SDECL,
 	SIF,
