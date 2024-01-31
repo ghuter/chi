@@ -7,6 +7,7 @@
 #include "lib/fatarena.h"
 #include "parser.h"
 
+#define LOCALSZ 64
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 
@@ -183,6 +184,70 @@ static int parse_call(const ETok *t, intptr ident, intptr *d);
 static int parse_otherop(const ETok *t, const ETok *eoe, intptr *expr);
 static int parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt);
 
+static void
+printptrlvl(FILE *fd, int ptrlvl) {
+	while (ptrlvl-- > 0) {
+		fprintf(fd, "^");
+	}
+}
+static void
+printtype(FILE *fd, intptr type, int ptrlvl)
+{
+	printptrlvl(fd, ptrlvl);
+	char *ctype = TYPESTR(type);
+	fprintf(fd, "%s", ctype);
+}
+
+static void
+printmembers(FILE *fd, intptr members, int nmember)
+{
+	SMember* m = (SMember*) ftptr(&ftast, members);
+	for (int i = 0; i < nmember; i++) {
+		fprintf(fd, ", %s : ", (char*) ftptr(&ftident, m->ident));
+		printtype(fd, m->type, m->ptrlvl);
+		m++;
+	}
+}
+
+static void
+printgenerics(FILE *fd, intptr generics)
+{
+	SGenerics *g = (SGenerics*) ftptr(&ftast, generics);
+	intptr *gens = (intptr*) ftptr(&ftast, g->generics);
+
+	fprintf(fd, "[");
+	for (int i = 0; i < g->ngen; i++) {
+		fprintf(fd, "%s", identstr(gens[i]));
+		if (i < g->ngen - 1) {
+			fprintf(fd, ", ");
+		}
+	}
+	fprintf(fd, "]");
+}
+
+static void
+printsignature(FILE *fd, SSignature *s)
+{
+	fprintf(fd, "%s: %s", identstr(s->ident), identstr(s->signature));
+	printgenerics(fd, s->generics);
+}
+
+static void
+printsignatures(FILE *fd, intptr signatures)
+{
+	SSignatures *s = (SSignatures*) ftptr(&ftast, signatures);
+	SSignature *ss = (SSignature*) ftptr(&ftast, s->signs);
+
+	fprintf(fd, "(");
+	for (int i = 0; i < s->nsign; i++) {
+		printsignature(fd, ss + i);
+		if (i < s->nsign - 1) {
+			fprintf(fd, ", ");
+		}
+	}
+	fprintf(fd, ")");
+}
+
 void
 printstmt(FILE *fd, intptr stmt)
 {
@@ -199,87 +264,42 @@ printstmt(FILE *fd, intptr stmt)
 	case SSTRUCT: {
 		SStruct *s = (SStruct*) ptr;
 		fprintf(fd, "%s(%s", stmtstrs[*ptr], (char*) ftptr(&ftident, s->ident));
-
-		SMember* members = (SMember*) ftptr(&ftast, s->members);
-		for (int i = 0; i < s->nmember; i++) {
-			fprintf(fd, ", <%s : ", (char*) ftptr(&ftident, members->ident));
-			int ptrlvl = members->ptrlvl;
-			while (ptrlvl-- > 0) {
-				fprintf(fd, "^");
-			}
-			fprintf(fd, "%s>", (char*) ftptr(&ftident, members->type));
-			members++;
-		}
+		printmembers(fd, s->members, s->nmember);
 		fprintf(fd, ")");
 		break;
 	}
 	case SDECL: {
 		SDecl *decl = (SDecl*) ptr;
-		char *type = decl->type ==  -1 ? "?" : (char*) ftptr(&ftident, decl->type);
 		if (decl->cst) {
 			fprintf(fd, "const ");
 		}
 		fprintf(fd, "%s(%s, ", stmtstrs[*ptr], (char*) ftptr(&ftident, decl->ident));
 		printexpr(fd, decl->expr);
 		fprintf(fd, ") : ");
-		int ptrlvl = decl->ptrlvl;
-		while (ptrlvl-- > 0) {
-			fprintf(fd, "^");
-		}
-		fprintf(fd, "%s", type);
+		printtype(fd, decl->type, decl->ptrlvl);
 		break;
 	}
 	case SFUN: {
 		SFun *fun = (SFun*) ptr;
-		char *ret = fun->type ==  -1 ? "void" : (char*) ftptr(&ftident, fun->type);
 		fprintf(fd, "%s(%s", stmtstrs[*ptr], (char*)ftptr(&ftident, fun->ident));
-
-		SMember* members = (SMember*) ftptr(&ftast, fun->params);
-		for (int i = 0; i < fun->nparam; i++) {
-			fprintf(fd, ", %s : ", (char*) ftptr(&ftident, members->ident));
-			int ptrlvl = members->ptrlvl;
-			while (ptrlvl-- > 0) {
-				fprintf(fd, "^");
-			}
-			fprintf(fd, "%s", (char*) ftptr(&ftident, members->type));
-			members++;
-		}
+		printmembers(fd, fun->params, fun->nparam);
 		fprintf(fd, ", {");
 		printstmt(fd, fun->stmt);
 		fprintf(fd, "}");
 		fprintf(fd, ") : ");
-
-		int ptrlvl = fun->ptrlvl;
-		while (ptrlvl-- > 0) {
-			fprintf(fd, "^");
-		}
+		printptrlvl(fd, fun->ptrlvl);
+		char *ret = fun->type == -1 ? "void" : identstr(fun->type);
 		fprintf(fd, "%s", ret);
-
 		return;
 	}
 	case SSIGN: {
 		SSign *fun = (SSign*) ptr;
-		char *ret = fun->type ==  -1 ? "void" : (char*) ftptr(&ftident, fun->type);
 		fprintf(fd, "%s(%s", stmtstrs[*ptr], (char*)ftptr(&ftident, fun->ident));
-
-		SMember* members = (SMember*) ftptr(&ftast, fun->params);
-		for (int i = 0; i < fun->nparam; i++) {
-			fprintf(fd, ", %s : ", (char*) ftptr(&ftident, members->ident));
-			int ptrlvl = members->ptrlvl;
-			while (ptrlvl-- > 0) {
-				fprintf(fd, "^");
-			}
-			fprintf(fd, "%s", (char*) ftptr(&ftident, members->type));
-			members++;
-		}
-
+		printmembers(fd, fun->params, fun->nparam);
 		fprintf(fd, ") : ");
-		int ptrlvl = fun->ptrlvl;
-		while (ptrlvl-- > 0) {
-			fprintf(fd, "^");
-		}
+		printptrlvl(fd, fun->ptrlvl);
+		char *ret = fun->type == -1 ? "void" : identstr(fun->type);
 		fprintf(fd, "%s", ret);
-
 		return;
 	}
 	case SRETURN: {
@@ -404,35 +424,24 @@ printexpr(FILE* fd, intptr expr)
 	}
 	case EBINOP: {
 		EBinop *binop = (EBinop*) ptr;
-		char* type = TYPESTR(binop->type);
 		fprintf(fd, "%s(%s, ", exprstrs[*ptr], opstrs[binop->op]);
 		printexpr(fd, binop->left);
 		fprintf(fd, ", ");
 		printexpr(fd, binop->right);
 		fprintf(fd, ") : ");
-		int ptrlvl = binop->ptrlvl;
-		while (ptrlvl -- > 0) {
-			fprintf(fd, "^");
-		}
-		fprintf(fd, "%s", type);
+		printtype(fd, binop->type, binop->ptrlvl);
 		return;
 	}
 	case EUNOP: {
 		EUnop *unop = (EUnop*) ptr;
-		char* type = TYPESTR(unop->type);
 		fprintf(fd, "%s(%s, ", exprstrs[*ptr], uopstrs[unop->op]);
 		printexpr(fd, unop->expr);
 		fprintf(fd, ") : ");
-		int ptrlvl = unop->ptrlvl;
-		while (ptrlvl -- > 0) {
-			fprintf(fd, "^");
-		}
-		fprintf(fd, "%s", type);
+		printtype(fd, unop->type, unop->ptrlvl);
 		return;
 	}
 	case ECALL: {
 		ECall *call = (ECall*) ptr;
-		char* type = TYPESTR(call->type);
 		intptr *paramtab = (intptr*) ftptr(&ftast, call->params);
 
 		fprintf(fd, "%s(", exprstrs[*ptr]);
@@ -442,41 +451,27 @@ printexpr(FILE* fd, intptr expr)
 			printexpr(fd, paramtab[i]);
 		}
 		fprintf(fd, ") : ");
-		int ptrlvl = call->ptrlvl;
-		while (ptrlvl -- > 0) {
-			fprintf(fd, "^");
-		}
-		fprintf(fd, "%s", type);
+		printtype(fd, call->type, call->ptrlvl);
 		return;
 	}
 	case EACCESS: {
 		EAccess *ac = (EAccess*) ptr;
-		char* type = TYPESTR(ac->type);
 		fprintf(fd, "%s(", exprstrs[*ptr]);
 		printexpr(fd, ac->expr);
 		fprintf(fd, ".");
 		fprintf(fd, "%s", (char*) ftptr(&ftident, ac->ident));
 		fprintf(fd, ") : ");
-		int ptrlvl = ac->ptrlvl;
-		while (ptrlvl -- > 0) {
-			fprintf(fd, "^");
-		}
-		fprintf(fd, "%s", type);
+		printtype(fd, ac->type, ac->ptrlvl);
 		return;
 	}
 	case ESUBSCR: {
 		ESubscr *sb = (ESubscr*) ptr;
-		char* type = TYPESTR(sb->type);
 		fprintf(fd, "%s(", exprstrs[*ptr]);
 		printexpr(fd, sb->expr);
 		fprintf(fd, "[");
 		printexpr(fd, sb->idxexpr);
 		fprintf(fd, "]) : ");
-		int ptrlvl = sb->ptrlvl;
-		while (ptrlvl -- > 0) {
-			fprintf(fd, "^");
-		}
-		fprintf(fd, "%s", type);
+		printtype(fd, sb->type, sb->ptrlvl);
 		return;
 	}
 	case ESTRUCT: {
@@ -1103,10 +1098,188 @@ parse_toplevel_fun(const ETok *t, intptr ident, intptr *stmt)
 }
 
 static int
-parse_toplevel_interface(const ETok *t)
+parse_generic_types(const ETok *t, intptr *generics)
+{
+	int i = 0;
+	static intptr gens[LOCALSZ] = {0};
+	int ngen = 0;
+
+	// Case no generic provided.
+	if (t[i] != LBRACKETS) {
+		return 0;
+	}
+	i++;
+
+	do {
+		if (t[i] != IDENTIFIER) {
+			ERR("Expects: `[ <IDENTIFIER> [, <IDENTIFIER>]* `]`");
+			return -1;
+		}
+		i++;
+		gens[ngen] = t[i];
+		ngen++;
+		i++;
+
+		if (t[i] != COMMA && t[i] != RBRACKETS) {
+			ERR("Expects: a `,` to separate or a `]` to close the list.");
+			return -1;
+		}
+
+		if (t[i] == COMMA) {
+			i++;
+		}
+
+		assert(ngen < LOCALSZ);
+	} while (t[i] != RBRACKETS);
+	// consume `]`
+	i++;
+
+	intptr gaddr = ftalloc(&ftast, sizeof(SGenerics));
+	*generics = gaddr;
+
+	intptr genaddr = ftalloc(&ftast, sizeof(intptr) * ngen);
+	intptr *array = (intptr*) ftptr(&ftast, genaddr);
+	memcpy(array, gens, sizeof(intptr) * ngen);
+
+	SGenerics *sg = (SGenerics*) ftptr(&ftast, gaddr);
+	sg->ngen = ngen;
+	sg->generics = genaddr;
+
+	return i;
+}
+
+static int
+parse_signature_params(const ETok *t, intptr *signatures)
+{
+	static SSignature signs[LOCALSZ];
+	int nsign = 0;
+	int i = 0;
+	int res = -1;
+
+	if (t[i] != LPAREN) {
+		return 0;
+	}
+
+	// parse signatures.
+	i++;
+
+	do {
+		intptr ident = -1;
+		intptr generics = -1;
+		intptr signature = -1;
+
+		if (t[i] != IDENTIFIER) {
+			ERR("Found: <%s> but expects: `( [<IDENTIFIER> : <IDENTIFIER> [ `[` <IDENTIFIER> [, IDENTIFIER]* `]`] ]+ `)`", tokenstrs[t[i]]);
+			return -1;
+		}
+		i++;
+		ident = t[i];
+		i++;
+		
+		if (t[i] != COLON) {
+			ERR("Found: <%s> but expects: `( [<IDENTIFIER> : <IDENTIFIER> [ `[` <IDENTIFIER> [, IDENTIFIER]* `]`] ]+ `)`", tokenstrs[t[i]]);
+			return -1;
+		}
+		i++;
+
+		if (t[i] != IDENTIFIER) {
+			ERR("Found: <%s> but expects: `( [<IDENTIFIER> : <IDENTIFIER> [ `[` <IDENTIFIER> [, IDENTIFIER]* `]`] ]+ `)`", tokenstrs[t[i]]);
+			return -1;
+		}
+		i++;
+		signature = t[i];
+		i++;
+
+		res = parse_generic_types(t + i, &generics);
+		if (res < 0) {
+			ERR("Error when parsing generic types for a signature param.");
+			return -1;
+		}
+		i += res;
+
+		if (t[i] != COMMA && t[i] != RPAREN) {
+			ERR("Found: <%s> but expects: a `,` to separate or a `)` to close the list.", tokenstrs[t[i]]);
+			return -1;
+		}
+
+		if (t[i] == COMMA) {
+			i++;
+		}
+
+		signs[nsign].ident = ident;
+		signs[nsign].signature = signature;
+		signs[nsign].generics = generics;
+		nsign++;
+
+		assert(nsign < LOCALSZ);
+	} while (t[i] != RPAREN);
+	// consume `)`
+	i++;
+
+	intptr saddr = ftalloc(&ftast, sizeof(SSignatures));
+	*signatures = saddr;
+
+	SSignatures *s = (SSignatures*) ftptr(&ftast, saddr);
+	s->nsign = nsign;
+	s->signs = ftalloc(&ftast, sizeof(SSignature) * nsign);
+
+	intptr *array = (intptr*) ftptr(&ftast, s->signs);
+	memcpy(array, signs, sizeof(SSignature) * nsign);
+	return i;
+}
+
+static int
+parse_toplevel_signature(const ETok *t)
+{
+	TODO("Toplevel signature");
+
+	int i = 0;
+	int res = -1;
+	intptr generics = -1;
+	intptr signatures = -1;
+
+	res = parse_generic_types(t + i, &generics);
+	if (res < 0) {
+		ERR("Error when parsing the generics of a signature.");
+		return -1;
+	}
+	i += res;
+	printgenerics(stderr, generics);
+	fprintf(stderr, "\n");
+
+	res = parse_signature_params(t +i, &signatures);
+	if (res < 0) {
+		ERR("Error when parsing the signature params of a signature.");
+		return -1;
+	}
+	i += res;
+	printsignatures(stderr, signatures);
+	fprintf(stderr, "\n");
+
+	return -1;
+}
+
+static int
+parse_toplevel_impl(const ETok *t)
 {
 	(void)t;
-	TODO("Toplevel interface");
+	TODO("Toplevel impl");
+	return -1;
+}
+
+static int
+parse_toplevel_skeleton(const ETok *t)
+{
+	(void)t;
+	TODO("Toplevel skeleton");
+	return -1;
+}
+
+static int
+parse_toplevel_define(const ETok *t)
+{
+	(void)t;
+	TODO("Toplevel define");
 	return -1;
 }
 
@@ -1209,7 +1382,7 @@ parse_call(const ETok *t, const intptr addr, intptr *d)
 	intptr caddr = ftalloc(&ftast, sizeof(ECall));
 	*d = caddr;
 
-	intptr params[64];
+	intptr params[LOCALSZ];
 	int nparam = 0;
 
 	// Parse the params
@@ -1228,6 +1401,7 @@ parse_call(const ETok *t, const intptr addr, intptr *d)
 		if (t[i] == COMMA) {
 			i++;
 		}
+		assert(nparam < LOCALSZ);
 	}
 
 	// consume RPAREN
@@ -1267,7 +1441,7 @@ parse_struct_elem(const ETok *t, const intptr addr, intptr *expr)
 	intptr saddr = ftalloc(&ftast, sizeof(EStruct));
 	*expr = saddr;
 
-	EElem elems[64];
+	EElem elems[LOCALSZ];
 	int nelem = 0;
 
 	// Parse the elems
@@ -1301,6 +1475,7 @@ parse_struct_elem(const ETok *t, const intptr addr, intptr *expr)
 		if (t[i] == COMMA) {
 			i++;
 		}
+		assert(nelem < LOCALSZ);
 	}
 
 	// consume RBRACES
@@ -1789,7 +1964,8 @@ parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
 	}
 	i++;
 
-	if (t[i] == STRUCT) {
+	switch (t[i]) {
+	case STRUCT:
 		i++;
 		res = parse_toplevel_struct(t + i, ident, stmt);
 		if (res < 0) {
@@ -1797,23 +1973,42 @@ parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
 			return -1;
 		}
 		i += res;
-	} else if (t[i] == ENUM) {
+		break;
+	case ENUM:
 		i++;
 		res = parse_toplevel_enum(t + i);
+		if (res < 0) {
+			ERR("Error toplevel enum");
+			return -1;
+		}
+		i += res;
+		break;
+	case FUN:
+		i++;
+		res = parse_toplevel_fun(t + i, ident, stmt);
 		if (res < 0) {
 			ERR("Error toplevel");
 			return -1;
 		}
 		i += res;
-	} else if (t[i] == FUN) {
+		break;
+	case SIGNATURE:
 		i++;
-		res = parse_toplevel_fun(t + i, ident, stmt);
-		if (res < 0) {
-			ERR("Error toplevel fun");
-			return -1;
-		}
-		i += res;
-	} else { /* Expression */
+		res = parse_toplevel_signature(t + i);
+		return -1;
+	case IMPL:
+		i++;
+		res = parse_toplevel_impl(t + i);
+		return -1;
+	case SKELETON:
+		i++;
+		res = parse_toplevel_skeleton(t + i);
+		return -1;
+	case DEFINE:
+		i++;
+		res = parse_toplevel_signature(t + i);
+		return -1;
+	default: {
 		const ETok eoe[3] = {SEMICOLON, UNDEFINED};
 		intptr expr = 0;
 
@@ -1841,7 +2036,7 @@ parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
 		}
 		// consume `;`
 		i++;
-
+	}
 	}
 
 	return i;

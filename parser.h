@@ -28,6 +28,10 @@ typedef enum {
 	SBLOCK,
 	SEXPRASSIGN,
 	SSIGN,
+	SMODSIGN,
+	SMODIMPL,
+	SMODSKEL,
+	SMODDEF,
 	NSTATEMENT,
 } EStmt;
 
@@ -120,6 +124,56 @@ typedef struct {
 	EStmt kind;
 	intptr ident;
 } SImport;
+
+typedef struct {
+	EStmt kind;
+	intptr ident;
+	intptr generics;
+	intptr signatures;
+	// things...
+} SModSign;
+
+typedef struct {
+	EStmt kind;
+	intptr ident;
+	intptr generics;
+	intptr modules;
+	intptr functions;
+} SModImpl;
+
+typedef struct {
+	EStmt kind;
+	intptr ident;
+	intptr signature;
+
+	intptr generics;
+	intptr signatures;
+	intptr functions;
+} SModSkel;
+
+typedef struct {
+	int ngen;
+	intptr generics; // intptr *ident;
+} SGenerics;
+
+typedef struct {
+	intptr ident;
+	intptr signature;
+	intptr generics; // *SGenerics
+} SSignature;
+
+typedef struct {
+	int nsign;
+	intptr signs; // -> SSignature*
+} SSignatures;
+
+typedef struct {
+	EStmt kind;
+	intptr ident;
+	intptr skeleton;
+	intptr generics;
+	intptr signatures;
+} SModDef;
 
 // -------------------- Expression
 
