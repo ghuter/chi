@@ -1,6 +1,14 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+typedef enum {
+	MODSIGN,
+	MODIMPL,
+	MODSKEL,
+	MODDEF,
+	NMODSYM,
+} EModSym;
+
 // -------------------- Memory
 
 extern FatArena ftast;
@@ -348,12 +356,14 @@ typedef struct {
 int parse_toplevel(const ETok *t, intptr *stmt);
 void printexpr(FILE *fd, intptr expr);
 void printstmt(FILE *fd, intptr stmt);
-int parse_tokens(const ETok *t, Symbols *funsym, Symbols *identsym, Symbols *typesym);
+int parse_tokens(const ETok *t, Symbols *signatures, Symbols *identsym, Symbols *typesym, Symbols modsym[NMODSYM]);
+
 
 extern const char *uopstrs[UOP_NUM];
 extern const char *stmtstrs[NSTATEMENT];
 extern const char *opstrs[OP_NUM];
 extern const char *exprstrs[NEXPR];
+extern const char *modsymstrs[NMODSYM];
 
 #endif /* PARSER_H */
 

@@ -40,6 +40,7 @@ extern Symbols identsym;
 extern Symbols typesym;
 extern Symbols signatures;
 extern SymInfo *syminfo;
+extern Symbols modsym[NMODSYM];
 
 const char* langtypestrs[NLANGTYPE] = {
 	[BOOL] = "bool",
@@ -1275,6 +1276,121 @@ analyzefun(SFun *fun, intptr stmt, int nsym)
 		return 0;
 	}
 
+	return 1;
+}
+
+Symbol*
+searchmod(intptr ident, EModSym mod)
+{
+	Symbols s = modsym[mod];
+	Symbol *ss = (Symbol*) ftptr(&ftsym, s.array);
+	for (int i = 0; i < s.nsym; i++) {
+		if (ss[i].ident == ident) {
+			return ss + i;
+		}
+	}
+	return NULL;
+}
+
+Bool
+issignatureequivalent(SSignature *s, SModSign *sign)
+{
+	SGenerics *g1 = (SGenerics*) ftptr(&ftast, s->generics);
+	SGenerics *g2 = (SGenerics*) ftptr(&ftast, sign->generics);
+
+	if (g1->ngen == g2->ngen) {
+		return 1;
+	}
+	return 0;
+}
+
+Bool
+existgenerics(SGenerics *g, intptr ident)
+{
+	intptr *gens = (intptr*) ftptr(&ftast, g->generics);
+	for (int i = 0; i < g->ngen; i++) {
+		if (gens[i] == ident) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+Bool
+g1containsg2(SGenerics *g1, SGenerics *g2)
+{
+	intptr *gens = (intptr*) ftptr(&ftast, g2->generics);
+	for (int i = 0; i < g2->ngen; i++) {
+		if (!existgenerics(g1, gens[i])) {
+			ERR("%s not found.", identstr(gens[i]));
+			return 0;
+		}
+	}
+	return 1;
+}
+
+Bool
+issigngendefined(SGenerics *g1, SSignature *s)
+{
+	Symbol *sym = searchmod(s->signature, MODSIGN);
+	// Verify if a signature is defined.
+	if (sym == NULL) {
+		ERR("The signature %s is used but it has never been defined.", identstr(s->signature));
+		return 0;
+	}
+
+	// Verify if the existing signature is equivalent with the used one.
+	SModSign *sign = (SModSign*) ftptr(&ftast, sym->stmt);
+	assert(sign->kind == SMODSIGN);
+
+	if (!issignatureequivalent(s, sign)) {
+		ERR("The signature %s is used isn't compatible with the defined one.", identstr(s->signature));
+		return 0;
+	}
+
+	// Verify if the generics of the signatures are declared.
+	SGenerics *g2 = (SGenerics*) ftptr(&ftast, s->generics);
+	if (!g1containsg2(g1, g2)) {
+		ERR("The signature %s use a non defined generic.", identstr(s->signature));
+		return 0;
+	}
+
+	return 1;
+}
+
+Bool
+aregendefined(intptr generics, intptr signatures)
+{
+	if (signatures == -1) {
+		return 0;
+	}
+
+	// No generics
+	if (generics == -1) {
+		return 0;
+	}
+
+	// Generics and signatures
+	SGenerics *g = (SGenerics*) ftptr(&ftast, generics);
+	SSignatures *s = (SSignatures*) ftptr(&ftast, signatures);
+	SSignature *signs = (SSignature*) ftptr(&ftast, s->signs);
+	for (int i = 0; i < s->nsign; i++) {
+		if (!issigngendefined(g, signs + i)) {
+			ERR("Usage of a undefined signature in the definition of a signature.");
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
+Bool
+analyzemodsign(SModSign *sign)
+{
+	if (!aregendefined(sign->generics, sign->signatures)) {
+		ERR("The module signature isn't correct.");
+		return 0;
+	}
 	return 1;
 }
 

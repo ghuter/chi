@@ -47,4 +47,5 @@ void printsymbolsinfo(int nsym);
 Bool analyzetype(SStruct *stmt);
 Bool analyzeglobalcst(SDecl *decl, int nelem);
 Bool analyzefun(SFun *fun, intptr stmt, int nsym);
+Bool analyzemodsign(SModSign *sign);
 #endif /* ANALYSE_H */

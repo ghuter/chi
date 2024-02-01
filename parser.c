@@ -163,6 +163,13 @@ const char *uopstrs[UOP_NUM] = {
 	[UOP_SIZEOF] = "SIZEOF",
 };
 
+const char *modsymstrs[NMODSYM] = {
+	[MODSIGN] = "MODSIGN",
+	[MODSKEL] = "MODSKEL",
+	[MODIMPL] = "MODIMPL",
+	[MODDEF]  = "MODDEF",
+};
+
 static const int assign_offset = ASSIGN;
 static const Op assigntable[MOD_ASSIGN - ASSIGN + 1] = {
 	[ASSIGN - ASSIGN] = -1,
@@ -2377,13 +2384,14 @@ inserttopdcl(Symbols *syms, intptr ident, intptr stmt)
 }
 
 int
-parse_tokens(const ETok *t, Symbols *signatures, Symbols *identsym, Symbols *typesym)
+parse_tokens(const ETok *t, Symbols *signatures, Symbols *identsym, Symbols *typesym, Symbols modsym[NMODSYM])
 {
 	int i = 0;
 	int res = -1;
 	int stmt = -1;
 
 	while (t[i] != EOI) {
+		int add = 0;
 		res = parse_toplevel(t + i, &stmt);
 		if (res < 0) {
 			fprintf(stderr, "Error when parsing toplevel stmt.\n");
@@ -2413,6 +2421,20 @@ parse_tokens(const ETok *t, Symbols *signatures, Symbols *identsym, Symbols *typ
 		}
 		case SIMPORT: {
 			TODO("save imports");
+			break;
+		}
+		case SMODDEF:
+			add++;
+			// fallthrough
+		case SMODSKEL:
+			add++;
+			// fallthrough
+		case SMODIMPL:
+			add++;
+			// fallthrough
+		case SMODSIGN: {
+			ident = ((SModDef*) stmtptr)->ident;
+			res = inserttopdcl(modsym + add, ident, stmt);
 			break;
 		}
 		default:

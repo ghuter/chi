@@ -50,10 +50,17 @@ FatArena fttmp   = {0};
 FatArena ftast   = {0};
 FatArena ftsym   = {0};
 
-Symbols funsym = {0};
-Symbols identsym = {0};
-Symbols typesym = {0};
+Symbols funsym     = {0};
+Symbols identsym   = {0};
+Symbols typesym    = {0};
 Symbols signatures = {0};
+
+Symbols modsign = {0};
+Symbols modskul = {0};
+Symbols modimpl = {0};
+Symbols moddef  = {0};
+
+Symbols modsym[NMODSYM] = {0};
 
 SymInfo *syminfo = NULL;
 
@@ -68,28 +75,32 @@ main(int argc, char *argv[])
 	(void) argc;
 	(void) argv;
 
-	POK(ftnew(&ftident, 1000000) != 0, "fail to create a FatArena");
-	ftalloc(&ftident, NKEYWORDS + 1);// burn significant int
-
-	POK(ftnew(&ftimmed, 1000000) != 0, "fail to create a FatArena");
-	ftalloc(&ftimmed, NKEYWORDS + 1);// burn significant int
-
-	POK(ftnew(&ftlit, 1000000) != 0, "fail to create a FatArena");
-	ftalloc(&ftlit, NKEYWORDS + 1);// burn significant int
-
-	POK(ftnew(&fttok, 1000000) != 0, "fail to create a FatArena");
-	int ntok = 0;
-
-	POK(ftnew(&fttmp, 1000000) != 0, "fail to create a FatArena");
-	POK(ftnew(&ftast, 1000000) != 0, "fail to create a FatArena");
-	POK(ftnew(&ftsym, 4000000) != 0, "fail to create a FatArena");
-
 	int pagesz = getpgsz();
 
-	identsym.array =   ftalloc(&ftsym, sizeof(Symbol) * pagesz);
-	funsym.array   =   ftalloc(&ftsym, sizeof(Symbol) * pagesz);
-	typesym.array  =   ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	POK(ftnew(&ftident, 10 * pagesz) != 0, "fail to create a FatArena");
+	ftalloc(&ftident, NKEYWORDS + 1);// burn significant int
+
+	POK(ftnew(&ftimmed, 10 * pagesz) != 0, "fail to create a FatArena");
+	ftalloc(&ftimmed, NKEYWORDS + 1);// burn significant int
+
+	POK(ftnew(&ftlit, 10 * pagesz) != 0, "fail to create a FatArena");
+	ftalloc(&ftlit, NKEYWORDS + 1);// burn significant int
+
+	POK(ftnew(&fttok, 10 * pagesz) != 0, "fail to create a FatArena");
+	int ntok = 0;
+
+	POK(ftnew(&fttmp, 10 * pagesz) != 0, "fail to create a FatArena");
+	POK(ftnew(&ftast, 10 * pagesz) != 0, "fail to create a FatArena");
+	POK(ftnew(&ftsym, 100 * pagesz) != 0, "fail to create a FatArena");
+
+	identsym.array   = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	funsym.array     = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	typesym.array    = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
 	signatures.array = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+
+	for (int i = 0; i < NMODSYM; i++) {
+		modsym[i].array = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	}
 
 	// -------------------- Alloc lang types
 	int type = -1;
@@ -124,7 +135,7 @@ main(int argc, char *argv[])
 	// -------------------- Parsing
 	int res = -1;
 
-	res = parse_tokens(tlst, &signatures, &identsym, &typesym);
+	res = parse_tokens(tlst, &signatures, &identsym, &typesym, modsym);
 	if (res < 0) {
 		ERR("Error when parsing tokens.");
 		return 1;
@@ -159,6 +170,17 @@ main(int argc, char *argv[])
 	printsymbols(&typesym);
 	printsymbols(&identsym);
 	printsymbols(&funsym);
+
+	Symbol *sym1 = (Symbol*) ftptr(&ftsym, modsym[MODSIGN].array);
+	assert(sym1 != NULL);
+
+	SModSign *s = (SModSign*) ftptr(&ftast, sym1->stmt);
+	analyzemodsign(s);
+
+	for (int i = 0; i < NMODSYM; i++) {
+		printsymbols(modsym + i);
+	}
+
 }
 
 
