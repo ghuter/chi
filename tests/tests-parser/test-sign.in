@@ -1,0 +1,7 @@
+a :: fun ();
+b :: fun (x: i32);
+c :: fun (x: i32, y: i8);
+d :: fun (x: i32, y: i32) i32;
+e :: fun (x: i32, y: i32) ^i32;
+f :: fun () i32;
+g :: fun () ^i32;

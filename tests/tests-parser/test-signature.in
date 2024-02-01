@@ -1,0 +1,31 @@
+A :: signature {
+	f :: fun();
+}
+
+B :: signature [T] {
+	f :: fun() ^T;
+}
+
+C :: signature [K, V] {
+	f :: fun(k: ^K) ^T;
+}
+
+D :: signature [K, V] (X: Module) {
+	f :: fun (k: ^K) ^V;
+}
+
+E :: signature [K, V] (X: Module[K]) {
+	f :: fun (k: ^K) ^V;
+}
+
+F :: signature [K, V] (X: Module[K], Y: Other[K, V]) {
+	f :: fun (k: ^K) ^V;
+}
+
+G :: signature (X: Module, Y: Other) {
+	f :: fun (k: i32) i32;
+}
+
+G :: signature (X: Module) {
+	f :: fun (k: i32) i32;
+}

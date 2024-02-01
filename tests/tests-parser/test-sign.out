@@ -1,0 +1,7 @@
+SSIGN(a) : void
+SSIGN(b, x : i32) : void
+SSIGN(c, x : i32, y : i8) : void
+SSIGN(d, x : i32, y : i32) : i32
+SSIGN(e, x : i32, y : i32) : ^i32
+SSIGN(f) : i32
+SSIGN(g) : ^i32

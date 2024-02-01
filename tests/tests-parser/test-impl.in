@@ -1,0 +1,19 @@
+A :: impl X {
+	f :: fun();
+}
+
+B :: impl X[T] {
+	f :: fun();
+}
+
+C :: impl X[K, V] {
+	f :: fun();
+}
+
+D :: impl X[K, V] (M: Module) {
+	f :: fun();
+}
+
+E :: impl X[K, V] (M: Module[K,V]) {
+	f :: fun();
+}

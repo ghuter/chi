@@ -1,0 +1,3 @@
+A :: define X [i32];
+B :: define X [i32, String];
+B :: define X [i32, String] (M: HashI32);

@@ -1,0 +1,8 @@
+SMODSIGN(A, [], (), {SSIGN(f) : void})
+SMODSIGN(B, [T], (), {SSIGN(f) : ^T})
+SMODSIGN(C, [K, V], (), {SSIGN(f, k : ^K) : ^T})
+SMODSIGN(D, [K, V], (X: Module[]), {SSIGN(f, k : ^K) : ^V})
+SMODSIGN(E, [K, V], (X: Module[K]), {SSIGN(f, k : ^K) : ^V})
+SMODSIGN(F, [K, V], (X: Module[K], Y: Other[K, V]), {SSIGN(f, k : ^K) : ^V})
+SMODSIGN(G, [], (X: Module[], Y: Other[]), {SSIGN(f, k : i32) : i32})
+SMODSIGN(G, [], (X: Module[]), {SSIGN(f, k : i32) : i32})
