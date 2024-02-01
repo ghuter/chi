@@ -426,6 +426,32 @@ printstmt(FILE *fd, intptr stmt)
 		fprintf(fd, "}) : %s", identstr(s->signature));
 		return;
 	}
+	case SMODSKEL: {
+		SModSkel *s = (SModSkel*) ptr;
+		fprintf(fd, "%s(%s, ", stmtstrs[*ptr], identstr(s->ident));
+
+		intptr *stmt = (intptr*) ftptr(&ftast, s->stmts);
+		for (int i = 0; i < s->nstmt; i++) {
+			printstmt(fd, stmt[i]);
+			if (i < s->nstmt - 1) {
+				fprintf(fd, ", ");
+			}
+		}
+		fprintf(fd, "}) : %s", identstr(s->signature));
+		return;
+	}
+	case SMODDEF: {
+		SModDef *s = (SModDef*) ptr;
+		fprintf(fd, "%s(%s, ", stmtstrs[*ptr], identstr(s->ident));
+		printgenerics(fd, s->generics);
+		fprintf(fd, ", ");
+		printgenerics(fd, s->generics);
+		fprintf(fd, ", ");
+		printsignatures(fd, s->modules);
+		fprintf(fd, ") : ");
+		printtype(fd, s->skeleton, -1);
+		return;
+	}
 	default:
 		ERR(" Unreachable statement in printstmt.");
 		assert(1 || "Unreachable stmt");
@@ -638,7 +664,7 @@ parse_stmt_return(const ETok *t, const ETok *eoe, intptr *stmt)
 }
 
 static int
-parse_stmt_assignexpr(const ETok *t, const ETok *eoe, intptr *stmt, intptr left)
+parse_stmt_assignexpr(const ETok *t, const ETok *eoe, const intptr left, intptr *stmt)
 {
 	int i = 0;
 	int res = -1;
@@ -693,7 +719,7 @@ parse_stmt_assignexpr(const ETok *t, const ETok *eoe, intptr *stmt, intptr left)
 }
 
 static int
-parse_stmt_assign(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident, int op)
+parse_stmt_assign(const ETok *t, const ETok *eoe, const intptr ident, const int op, intptr *stmt)
 {
 	int i = 0;
 	int res = -1;
@@ -747,7 +773,7 @@ parse_stmt_assign(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident, in
 }
 
 static int
-parse_stmt_call(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident)
+parse_stmt_call(const ETok *t, const ETok *eoe, const intptr ident, intptr *stmt)
 {
 	int i = 0;
 	int res = -1;
@@ -777,7 +803,7 @@ parse_stmt_call(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident)
 }
 
 static int
-parse_stmt_decl(const ETok *t, const ETok *eoe, intptr *stmt, intptr ident)
+parse_stmt_decl(const ETok *t, const ETok *eoe, const intptr ident, intptr *stmt)
 {
 	int i = 0;
 	int res = -1;
@@ -1011,7 +1037,7 @@ parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 		}
 		i += res;
 
-		res = parse_stmt_assignexpr(t + i, eoe, stmt, expr);
+		res = parse_stmt_assignexpr(t + i, eoe, expr, stmt);
 		if (res < 0) {
 			ERR("Error when parsing the left part of an assign.");
 			return -1;
@@ -1026,13 +1052,13 @@ parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 		if (t[i] >= ASSIGN && t[i] <= MOD_ASSIGN) {
 			Op op = ASSIGN2OP(t[i]);
 			i++;
-			res = parse_stmt_assign(t + i, eoe, stmt, ident, op);
+			res = parse_stmt_assign(t + i, eoe, ident, op, stmt);
 			break;
 		}
 
 		if (t[i] == LPAREN) {
 			i++;
-			res = parse_stmt_call(t + i, eoe, stmt, ident);
+			res = parse_stmt_call(t + i, eoe, ident, stmt);
 			break;
 		}
 
@@ -1047,7 +1073,7 @@ parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 			}
 			i += res;
 
-			res = parse_stmt_assignexpr(t + i, eoe, stmt, expr);
+			res = parse_stmt_assignexpr(t + i, eoe, expr, stmt);
 			if (res < 0) {
 				ERR("Error when parsing the left part of an assign.");
 				return -1;
@@ -1055,7 +1081,7 @@ parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 			break;
 		}
 
-		res = parse_stmt_decl(t + i, eoe, stmt, ident);
+		res = parse_stmt_decl(t + i, eoe, ident, stmt);
 		break;
 	case IF: {
 		i++;
@@ -1098,7 +1124,7 @@ parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 
 
 static int
-parse_toplevel_fun(const ETok *t, intptr ident, intptr *stmt)
+parse_toplevel_fun(const ETok *t, const intptr ident, intptr *stmt)
 {
 	const ETok eoe[] = {SEMICOLON, UNDEFINED};
 	int i = 0;
@@ -1311,7 +1337,7 @@ parse_signature_params(const ETok *t, intptr *signatures)
 }
 
 static int
-parse_toplevel_signature(const ETok *t, intptr ident, intptr *stmt)
+parse_toplevel_signature(const ETok *t, const intptr ident, intptr *stmt)
 {
 	int i = 0;
 	int res = -1;
@@ -1354,7 +1380,7 @@ parse_toplevel_signature(const ETok *t, intptr ident, intptr *stmt)
 }
 
 static int
-parse_toplevel_impl(const ETok *t, intptr ident, intptr *stmt)
+parse_toplevel_impl(const ETok *t, const intptr ident, intptr *stmt)
 {
 	int i = 0;
 	int res = -1;
@@ -1409,19 +1435,88 @@ parse_toplevel_impl(const ETok *t, intptr ident, intptr *stmt)
 }
 
 static int
-parse_toplevel_skeleton(const ETok *t)
+parse_toplevel_skeleton(const ETok *t, const intptr ident, intptr *stmt)
 {
-	(void)t;
-	TODO("Toplevel skeleton");
-	return -1;
+	int i = 0;
+	int res = -1;
+
+	intptr signature = -1;
+	intptr stmtlst = -1; 
+	int nstmt = 0;
+
+	if (t[i] != IDENTIFIER) {
+		ERR("Found <%s>, but an implementation expects a signature identifier.", tokenstrs[t[i]]);
+		ERR("<IDENTIFIER> :: impl <IDENTIFIER> `[` generics `]` `(` modules `)` `{` `}`");
+		return -1;
+	}
+	i++;
+	signature = t[i];
+	i++;
+
+	res = parse_stmts(t + i, &stmtlst, &nstmt);
+	if (res < 0) {
+		ERR("Error when parsing the stmts of a signature.");
+		return -1;
+	}
+	i += res;
+
+	*stmt = ftalloc(&ftast, sizeof(SModSkel));
+	SModSkel *s = (SModSkel*) ftptr(&ftast, *stmt);
+	s->kind = SMODSKEL;
+	s->ident = ident;
+	s->signature = signature;
+	s->stmts = stmtlst;
+	s->nstmt = nstmt;
+	return i;
 }
 
 static int
-parse_toplevel_define(const ETok *t)
+parse_toplevel_define(const ETok *t, const intptr ident, intptr *stmt)
 {
-	(void)t;
-	TODO("Toplevel define");
-	return -1;
+	int i = 0;
+	int res = -1;
+
+	intptr skeleton = -1;
+	intptr generics = -1;
+	intptr modules = -1;
+
+	if (t[i] != IDENTIFIER) {
+		ERR("Found <%s>, but an definition expects a skeleton identifier.", tokenstrs[t[i]]);
+		ERR("<IDENTIFIER> :: skeleton <IDENTIFIER> `[` generics `]` `(` modules `)` `{` `}`");
+		return -1;
+	}
+	i++;
+	skeleton = t[i];
+	i++;
+
+	res = parse_generic_types(t + i, &generics);
+	if (res < 0) {
+		ERR("Error when parsing the generics of a definition.");
+		return -1;
+	}
+	i += res;
+
+	res = parse_signature_params(t +i, &modules);
+	if (res < 0) {
+		ERR("Error when parsing the signature params of a definition.");
+		return -1;
+	}
+	i += res;
+
+	if (t[i] != SEMICOLON) {
+		ERR("Error when parsing a definition, `;` is required at the end.");
+		return -1;
+	}
+	i++;
+
+	*stmt = ftalloc(&ftast, sizeof(SModDef));
+	SModDef *s = (SModDef*) ftptr(&ftast, *stmt);
+	s->kind = SMODDEF;
+	s->ident = ident;
+	s->skeleton = skeleton;
+	s->generics = generics;
+	s->modules = modules;
+	return i;
 }
 
 static int
@@ -2153,12 +2248,22 @@ parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
 		break;
 	case SKELETON:
 		i++;
-		res = parse_toplevel_skeleton(t + i);
-		return -1;
+		res = parse_toplevel_skeleton(t + i, ident, stmt);
+		if (res < 0) {
+			ERR("Error when parsing the skeleton: %s", identstr(ident));
+			return -1;
+		}
+		i += res;
+		break;
 	case DEFINE:
 		i++;
-		res = parse_toplevel_define(t + i);
-		return -1;
+		res = parse_toplevel_define(t + i, ident, stmt);
+		if (res < 0) {
+			ERR("Error when parsing the define: %s", identstr(ident));
+			return -1;
+		}
+		i += res;
+		break;
 	default: {
 		const ETok eoe[3] = {SEMICOLON, UNDEFINED};
 		intptr expr = 0;

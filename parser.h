@@ -127,32 +127,66 @@ typedef struct {
 
 typedef struct {
 	EStmt kind;
+
+	// Impl name:
 	intptr ident;
+
+	// Generic params:
 	intptr generics;
+
+	// Module params:
 	intptr signatures;
+
+	// Stmts (signature / structs)
 	int nstmt;
 	intptr stmts; // [UnknownStmt]
 } SModSign;
 
 typedef struct {
 	EStmt kind;
+
+	// Impl name:
 	intptr ident;
+
+	// Impl what:
 	intptr signature;
+
+	// Generic params:
 	intptr generics;
+	// Module params:
 	intptr modules;
+
+	// Stmts:
 	int nstmt;
 	intptr stmts; // [UnknownStmt]
 } SModImpl;
 
 typedef struct {
 	EStmt kind;
+	// Impl name:
 	intptr ident;
+
+	// Impl what:
 	intptr signature;
 
-	intptr generics;
-	intptr signatures;
-	intptr functions;
+	// Stmts
+	int nstmt;
+	intptr stmts;
 } SModSkel;
+
+typedef struct {
+	EStmt kind;
+	// Impl name:
+	intptr ident;
+
+	// Generic params:
+	intptr generics;
+	// Module params:
+	intptr modules;
+
+	// Impl what:
+	intptr skeleton;
+} SModDef;
 
 typedef struct {
 	int ngen;
@@ -169,14 +203,6 @@ typedef struct {
 	int nsign;
 	intptr signs; // -> SSignature*
 } SSignatures;
-
-typedef struct {
-	EStmt kind;
-	intptr ident;
-	intptr skeleton;
-	intptr generics;
-	intptr signatures;
-} SModDef;
 
 // -------------------- Expression
 
