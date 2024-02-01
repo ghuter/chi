@@ -130,15 +130,18 @@ typedef struct {
 	intptr ident;
 	intptr generics;
 	intptr signatures;
-	// things...
+	int nstmt;
+	intptr stmts; // [UnknownStmt]
 } SModSign;
 
 typedef struct {
 	EStmt kind;
 	intptr ident;
+	intptr signature;
 	intptr generics;
 	intptr modules;
-	intptr functions;
+	int nstmt;
+	intptr stmts; // [UnknownStmt]
 } SModImpl;
 
 typedef struct {

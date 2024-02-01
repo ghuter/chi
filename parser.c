@@ -108,6 +108,10 @@ const char *stmtstrs[NSTATEMENT] = {
 	[SRETURN]     = "SRETURN",
 	[SIMPORT]     = "SIMPORT",
 	[SSIGN]       = "SSIGN",
+	[SMODSIGN]    = "SMODSIGN",
+	[SMODIMPL]    = "SMODIMPL",
+	[SMODSKEL]    = "SMODSKEL",
+	[SMODDEF]     = "SMODDEF",
 	[SEXPRASSIGN] = "SEXPRASSIGN",
 };
 
@@ -212,6 +216,11 @@ printmembers(FILE *fd, intptr members, int nmember)
 static void
 printgenerics(FILE *fd, intptr generics)
 {
+	if (generics == -1) {
+		fprintf(fd, "[]");
+		return;
+	}
+
 	SGenerics *g = (SGenerics*) ftptr(&ftast, generics);
 	intptr *gens = (intptr*) ftptr(&ftast, g->generics);
 
@@ -235,6 +244,11 @@ printsignature(FILE *fd, SSignature *s)
 static void
 printsignatures(FILE *fd, intptr signatures)
 {
+	if (signatures == -1) {
+		fprintf(fd, "()");
+		return;
+	}
+
 	SSignatures *s = (SSignatures*) ftptr(&ftast, signatures);
 	SSignature *ss = (SSignature*) ftptr(&ftast, s->signs);
 
@@ -376,7 +390,41 @@ printstmt(FILE *fd, intptr stmt)
 	case SIMPORT: {
 		SImport *import = (SImport*) ptr;
 		fprintf(fd, "%s(%s)", stmtstrs[*ptr], (char*) ftptr(&ftident, import->ident));
-		break;
+		return;
+	}
+	case SMODSIGN: {
+		SModSign *s = (SModSign*) ptr;
+		fprintf(fd, "%s(%s, ", stmtstrs[*ptr], identstr(s->ident));
+		printgenerics(fd, s->generics);
+		fprintf(fd, ", ");
+		printsignatures(fd, s->signatures);
+		fprintf(fd, ", {");
+		intptr *stmt = (intptr*) ftptr(&ftast, s->stmts);
+		for (int i = 0; i < s->nstmt; i++) {
+			printstmt(fd, stmt[i]);
+			if (i < s->nstmt - 1) {
+				fprintf(fd, ", ");
+			}
+		}
+		fprintf(fd, "})");
+		return;
+	}
+	case SMODIMPL: {
+		SModImpl *s = (SModImpl*) ptr;
+		fprintf(fd, "%s(%s, ", stmtstrs[*ptr], identstr(s->ident));
+		printgenerics(fd, s->generics);
+		fprintf(fd, ", ");
+		printsignatures(fd, s->modules);
+		fprintf(fd, ", {");
+		intptr *stmt = (intptr*) ftptr(&ftast, s->stmts);
+		for (int i = 0; i < s->nstmt; i++) {
+			printstmt(fd, stmt[i]);
+			if (i < s->nstmt - 1) {
+				fprintf(fd, ", ");
+			}
+		}
+		fprintf(fd, "}) : %s", identstr(s->signature));
+		return;
 	}
 	default:
 		ERR(" Unreachable statement in printstmt.");
@@ -1149,6 +1197,40 @@ parse_generic_types(const ETok *t, intptr *generics)
 }
 
 static int
+parse_stmts(const ETok *t, intptr *stmtlst, int *nstmt)
+{
+	int i = 0;
+	int res = -1;
+
+	if (t[i] != LBRACES) {
+		ERR("Found <%s> but expects `{` at the beginning of stmt block.", tokenstrs[t[i]]);
+		return -1;
+	}
+	i++;
+
+	*nstmt = 0;
+	intptr stmts[LOCALSZ];
+	while (t[i] != RBRACES) {
+		assert(*nstmt < LOCALSZ);
+
+		res = parse_toplevel(t + i, stmts + *nstmt);
+		if (res < 0) {
+			ERR("Error when parsing the signature.");
+			return -1;
+		}
+		i += res;
+		*nstmt += 1;
+	}
+	// consume `}`
+	i++; 
+
+	*stmtlst = ftalloc(&ftast, sizeof(intptr) * *nstmt);
+	intptr *array = (intptr*) ftptr(&ftast, *stmtlst);
+	memcpy(array, stmts, sizeof(intptr) * *nstmt);
+
+	return i;
+}
+static int
 parse_signature_params(const ETok *t, intptr *signatures)
 {
 	static SSignature signs[LOCALSZ];
@@ -1229,14 +1311,14 @@ parse_signature_params(const ETok *t, intptr *signatures)
 }
 
 static int
-parse_toplevel_signature(const ETok *t)
+parse_toplevel_signature(const ETok *t, intptr ident, intptr *stmt)
 {
-	TODO("Toplevel signature");
-
 	int i = 0;
 	int res = -1;
 	intptr generics = -1;
 	intptr signatures = -1;
+	intptr stmtlst = -1;
+	int nstmt = 0;
 
 	res = parse_generic_types(t + i, &generics);
 	if (res < 0) {
@@ -1244,8 +1326,6 @@ parse_toplevel_signature(const ETok *t)
 		return -1;
 	}
 	i += res;
-	printgenerics(stderr, generics);
-	fprintf(stderr, "\n");
 
 	res = parse_signature_params(t +i, &signatures);
 	if (res < 0) {
@@ -1253,18 +1333,79 @@ parse_toplevel_signature(const ETok *t)
 		return -1;
 	}
 	i += res;
-	printsignatures(stderr, signatures);
-	fprintf(stderr, "\n");
 
-	return -1;
+	res = parse_stmts(t + i, &stmtlst, &nstmt);
+	if (res < 0) {
+		ERR("Error when parsing the stmts of a signature.");
+		return -1;
+	}
+	i += res;
+
+	*stmt = ftalloc(&ftast, sizeof(SModSign));
+	SModSign *s = (SModSign*) ftptr(&ftast, *stmt);
+	s->kind = SMODSIGN;
+	s->ident = ident;
+	s->generics = generics;
+	s->signatures = signatures;
+	s->nstmt = nstmt;
+	s->stmts = stmtlst;
+
+	return i;
 }
 
 static int
-parse_toplevel_impl(const ETok *t)
+parse_toplevel_impl(const ETok *t, intptr ident, intptr *stmt)
 {
-	(void)t;
-	TODO("Toplevel impl");
-	return -1;
+	int i = 0;
+	int res = -1;
+
+	intptr generics = -1;
+	intptr modules = -1;
+	intptr signature = -1;
+	intptr stmtlst = -1; 
+	int nstmt = 0;
+
+	if (t[i] != IDENTIFIER) {
+		ERR("Found <%s>, but an implementation expects a signature identifier.", tokenstrs[t[i]]);
+		ERR("<IDENTIFIER> :: impl <IDENTIFIER> `[` generics `]` `(` modules `)` `{` `}`");
+		return -1;
+	}
+	i++;
+	signature = t[i];
+	i++;
+
+	res = parse_generic_types(t + i, &generics);
+	if (res < 0) {
+		ERR("Error when parsing the generics of an impl.");
+		return -1;
+	}
+	i += res;
+
+	res = parse_signature_params(t + i, &modules);
+	if (res < 0) {
+		ERR("Error when parsing the impl params of an impl.");
+		return -1;
+	}
+	i += res;
+
+	res = parse_stmts(t + i, &stmtlst, &nstmt);
+	if (res < 0) {
+		ERR("Error when parsing the stmts of a signature.");
+		return -1;
+	}
+	i += res;
+
+	*stmt = ftalloc(&ftast, sizeof(SModImpl));
+	SModImpl *s = (SModImpl*) ftptr(&ftast, *stmt);
+	s->kind = SMODIMPL;
+	s->ident = ident;
+	s->signature = signature;
+	s->generics = generics;
+	s->modules = modules;
+	s->nstmt = nstmt;
+	s->stmts = stmtlst;
+
+	return i;
 }
 
 static int
@@ -1969,7 +2110,7 @@ parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
 		i++;
 		res = parse_toplevel_struct(t + i, ident, stmt);
 		if (res < 0) {
-			ERR("Error toplevel");
+			ERR("Error when parsing the struct: %s", identstr(ident));
 			return -1;
 		}
 		i += res;
@@ -1978,7 +2119,7 @@ parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
 		i++;
 		res = parse_toplevel_enum(t + i);
 		if (res < 0) {
-			ERR("Error toplevel enum");
+			ERR("Error when parsing the enum: %s", identstr(ident));
 			return -1;
 		}
 		i += res;
@@ -1987,26 +2128,36 @@ parse_toplevel_decl(const ETok *t, intptr ident, intptr *stmt)
 		i++;
 		res = parse_toplevel_fun(t + i, ident, stmt);
 		if (res < 0) {
-			ERR("Error toplevel");
+			ERR("Error when parsing the fun: %s", identstr(ident));
 			return -1;
 		}
 		i += res;
 		break;
 	case SIGNATURE:
 		i++;
-		res = parse_toplevel_signature(t + i);
-		return -1;
+		res = parse_toplevel_signature(t + i, ident, stmt);
+		if (res < 0) {
+			ERR("Error when parsing the signature: %s", identstr(ident));
+			return -1;
+		}
+		i += res;
+		break;
 	case IMPL:
 		i++;
-		res = parse_toplevel_impl(t + i);
-		return -1;
+		res = parse_toplevel_impl(t + i, ident, stmt);
+		if (res < 0) {
+			ERR("Error when parsing the impl: %s", identstr(ident));
+			return -1;
+		}
+		i += res;
+		break;
 	case SKELETON:
 		i++;
 		res = parse_toplevel_skeleton(t + i);
 		return -1;
 	case DEFINE:
 		i++;
-		res = parse_toplevel_signature(t + i);
+		res = parse_toplevel_define(t + i);
 		return -1;
 	default: {
 		const ETok eoe[3] = {SEMICOLON, UNDEFINED};
