@@ -353,6 +353,10 @@ getchildtype(intptr expr)
 		TYPEOF(ESubscr);
 		break;
 	}
+	case EMEM: {
+		TYPEOF(Mem);
+		break;
+	}
 	default:
 		fprintf(stderr, "default hit with: %d\n", *ptr);
 		return -1;
@@ -477,7 +481,7 @@ genstmt(intptr stmt)
 	}
 
 	switch (*ptr) {
-	case NOP:
+	case SNOP:
 		break;
 	case SSTRUCT: {
 		SStruct *s = (SStruct*) ptr;
@@ -603,6 +607,31 @@ genstmt(intptr stmt)
 		CODEADD(");\n");
 		break;
 	}
+	case SSIGN: {
+		SSign *sig = (SSign*) ptr;
+		char *ret = sig->type ==  -1 ? "void" : (char*) ftptr(&ftident, sig->type);
+
+		CODEADD("%s", ret);
+		int ptrlvl = sig->ptrlvl;
+		while (ptrlvl-- > 0) {
+			CODEADD("*");
+		}
+		CODEADD(" %s(", (char*)ftptr(&ftident, sig->ident));
+
+		SMember* members = (SMember*) ftptr(&ftast, sig->params);
+		for (int i = 0; i < sig->nparam; i++) {
+			if (i != 0) CODEADD(", ");
+			CODEADD("%s ", (char*) ftptr(&ftident, members->type));
+			int ptrlvl = members->ptrlvl;
+			while (ptrlvl-- > 0) {
+				CODEADD("*");
+			}
+			CODEADD("%s", (char*) ftptr(&ftident, members->ident));
+			members++;
+		}
+		CODEADD(");\n");
+		break;
+	}
 	case SIMPORT: {
 		TODO("imports");
 		// SImport *import = (SImport*) ptr;
@@ -616,7 +645,7 @@ genstmt(intptr stmt)
 }
 
 size_t
-gen(char *code, Symbols typesym, Symbols identsym, Symbols funsym)
+gen(char *code, Symbols typesym, Symbols identsym, Symbols signatures, Symbols funsym)
 {
 	hd = code;
 
@@ -646,6 +675,18 @@ gen(char *code, Symbols typesym, Symbols identsym, Symbols funsym)
 	Symbol *symd = (Symbol*) ftptr(&ftsym, identsym.array);
 	for (int i = 0; i < identsym.nsym; i++) {
 		genstmt(symd[i].stmt);
+	}
+
+	CODEADD("\n");
+
+	Symbol *sig = (Symbol*) ftptr(&ftsym, signatures.array);
+	for (int i = 0; i < signatures.nsym; i++) {
+		intptr stmt = sig[i].stmt;
+		UnknownStmt *ptr = (UnknownStmt*) ftptr(&ftast, stmt);
+		if (stmt == -1 || *ptr != SSIGN) {
+			continue;
+		}
+		genstmt(stmt);
 	}
 
 	CODEADD("\n");
