@@ -15,10 +15,10 @@
 
 #define TODO(message)                                                   \
     do {                                                                \
-        fprintf(stderr, "TODO(%s): %s\n", TOSTRING(__LINE__), message); \
+        fprintf(stderr, "TODO(%s:%d): %s\n", __FILE__, __LINE__, message); \
     } while (0)
 
-#define ERR(...) fprintf(stderr, "ERR(%d): ", __LINE__); fprintf(stderr, __VA_ARGS__), fprintf(stderr, "\n")
+#define ERR(...) fprintf(stderr, "ERR(%s:%d): ", __FILE__, __LINE__); fprintf(stderr, __VA_ARGS__), fprintf(stderr, "\n")
 
 #define PRINTINFO 0
 #if PRINTINFO == 0
@@ -679,7 +679,7 @@ analyzebinop(EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 		LangType ltype = ident2langtype[binop->type - typeoffset];
 		if (ltype == F32 || ltype == F64 || ltype == BOOL) {
 			ERR("Incompatible op <%s> with expressions left: <%s ptrlvl(%d)>, right: <%s ptrlvl(%d)>.", opstrs[binop->op], identstr(type1), ptrlvl1, identstr(type2), ptrlvl2);
-		 	return 0;
+			return 0;
 		}
 
 		*type = binop->type;
@@ -1307,6 +1307,10 @@ issignatureequivalent(SSignature *s, SModSign *sign)
 Bool
 existgenerics(SGenerics *g, intptr ident)
 {
+	if (g == NULL) {
+		return 0;
+	}
+
 	intptr *gens = (intptr*) ftptr(&ftast, g->generics);
 	for (int i = 0; i < g->ngen; i++) {
 		if (gens[i] == ident) {
@@ -1319,6 +1323,11 @@ existgenerics(SGenerics *g, intptr ident)
 Bool
 g1containsg2(SGenerics *g1, SGenerics *g2)
 {
+	if (g1 == NULL) {
+		ERR("No generic provided.");
+		return 0;
+	}
+
 	intptr *gens = (intptr*) ftptr(&ftast, g2->generics);
 	for (int i = 0; i < g2->ngen; i++) {
 		if (!existgenerics(g1, gens[i])) {
@@ -1330,7 +1339,7 @@ g1containsg2(SGenerics *g1, SGenerics *g2)
 }
 
 Bool
-issigngendefined(SGenerics *g1, SSignature *s)
+sign_is_generic_defined(SGenerics *g1, SSignature *s)
 {
 	Symbol *sym = searchmod(s->signature, MODSIGN);
 	// Verify if a signature is defined.
@@ -1349,33 +1358,36 @@ issigngendefined(SGenerics *g1, SSignature *s)
 	}
 
 	// Verify if the generics of the signatures are declared.
-	SGenerics *g2 = (SGenerics*) ftptr(&ftast, s->generics);
-	if (!g1containsg2(g1, g2)) {
-		ERR("The signature %s use a non defined generic.", identstr(s->signature));
-		return 0;
+	if (s->generics != -1) {
+		SGenerics *g2 = (SGenerics*) ftptr(&ftast, s->generics);
+		if (!g1containsg2(g1, g2)) {
+			ERR("The signature %s use a non defined generic.", identstr(s->signature));
+			return 0;
+		}
 	}
 
 	return 1;
 }
 
 Bool
-aregendefined(intptr generics, intptr signatures)
+sign_are_generics_defined(intptr generics, intptr signatures)
 {
+	// No signatures
 	if (signatures == -1) {
-		return 0;
+		return 1;
 	}
 
 	// No generics
-	if (generics == -1) {
-		return 0;
+	SGenerics *g = NULL;
+	if (generics != -1) {
+		g = (SGenerics*) ftptr(&ftast, generics);
 	}
 
 	// Generics and signatures
-	SGenerics *g = (SGenerics*) ftptr(&ftast, generics);
 	SSignatures *s = (SSignatures*) ftptr(&ftast, signatures);
 	SSignature *signs = (SSignature*) ftptr(&ftast, s->signs);
 	for (int i = 0; i < s->nsign; i++) {
-		if (!issigngendefined(g, signs + i)) {
+		if (!sign_is_generic_defined(g, signs + i)) {
 			ERR("Usage of a undefined signature in the definition of a signature.");
 			return 0;
 		}
@@ -1385,12 +1397,295 @@ aregendefined(intptr generics, intptr signatures)
 }
 
 Bool
-analyzemodsign(SModSign *sign)
+sign_is_type_exist(SModSign *s, SGenerics *g, intptr ident, int ptrlvl, Bool verifyptrlvl)
 {
-	if (!aregendefined(sign->generics, sign->signatures)) {
-		ERR("The module signature isn't correct.");
+	(void) s;
+
+	if (istypedefined(ident)) {
+		return 1;
+	}
+
+	if (existgenerics(g, ident)) {
+		if (!verifyptrlvl) {
+			return 1;
+		}
+		return ptrlvl > 0;
+	}
+
+	TODO("Verify if the struct is defined in the module.");
+	return 0;
+}
+
+Bool
+sign_analyze_stmt(SModSign *sign, SGenerics *g, intptr stmt)
+{
+	UnknownStmt *unknown = (UnknownStmt*) ftptr(&ftast, stmt);
+	switch (*unknown) {
+	case SSTRUCT: {
+		SStruct *s = (SStruct*) unknown;
+		// Verify members
+		if (s->nmember > 0) {
+			SMember *m = (SMember*) ftptr(&ftast, s->members);
+			for (int i = 0; i < s->nmember; i++) {
+				if (!sign_is_type_exist(sign, g, m[i].type, m[i].ptrlvl, 1)) {
+					ERR("Using of <%s ptrlvl(%d)> which is undefined or a generic but not a pointer.", identstr(m[i].type), m[i].ptrlvl);
+					ERR("In the struct <%s>.", identstr(s->ident));
+					return 0;
+				}
+			}
+		}
+		break;
+	}
+	case SSIGN: {
+		SSign *s = (SSign*) unknown;
+		// Verify return type
+		if (!sign_is_type_exist(sign, g, s->type, s->ptrlvl, 1)) {
+			ERR("Using an undefined type <%s>.", identstr(s->type));
+			ERR("In the fun <%s>.", identstr(s->ident));
+			return 0;
+		}
+
+		// Verify params
+		if (s->nparam > 0) {
+			SMember *m = (SMember*) ftptr(&ftast, s->params);
+			for (int i = 0; i < s->nparam; i++) {
+				if (!sign_is_type_exist(sign, g, m[i].type, m[i].ptrlvl, 1)) {
+					ERR("Using of <%s ptrlvl(%d)> which is undefined or a generic but not a pointer.", identstr(m[i].type), m[i].ptrlvl);
+					ERR("In the fun <%s>.", identstr(s->ident));
+					return 0;
+				}
+			}
+		}
+
+		break;
+	}
+	default:
+		ERR("Unexpected stmt <%s> in a module signature.", stmtstrs[*unknown]);
 		return 0;
 	}
+
 	return 1;
+}
+
+Bool
+analyzemodsign(SModSign *sign)
+{
+	// Verify the generics.
+	if (!sign_are_generics_defined(sign->generics, sign->signatures)) {
+		ERR("The module signature <%s> isn't correct.", identstr(sign->ident));
+		return 0;
+	}
+
+	// Verify that there is only SSign or SStruct + analyze.
+	intptr* stmt = (intptr*) ftptr(&ftast, sign->stmts);
+	for (int i = 0; i < sign->nstmt; i++) {
+		SGenerics *g = NULL;
+		if (sign->generics != -1) {
+			g = (SGenerics*) ftptr(&ftast, sign->generics);
+		}
+
+		if (!sign_analyze_stmt(sign, g, stmt[i])) {
+			ERR("The stmts of the module signature <%s> isn't correct.", identstr(sign->ident));
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
+intptr
+searchreal(intptr convtab, int nconv, intptr generic)
+{
+	SConv *c = (SConv*) ftptr(&ftast, convtab);
+
+	for (int i = 0; i < nconv; i++) {
+		if (c[i].gen == generic) {
+			return c[i].real;
+		}
+	}
+
+	return -1;
+}
+
+Bool
+getmodinfo(intptr module, intptr *generics, intptr *signature)
+{
+	Symbol *s = NULL;
+
+	s = searchtopdcl(modsym + MODIMPL, module);
+	if (s != NULL) {
+		SModImpl *i = (SModImpl*) ftptr(&ftast, s->stmt);
+		assert(i->kind == SMODIMPL);
+		*generics = i->generics;
+		*signature = i->signature;
+		return 1;
+	}
+
+	s = searchtopdcl(modsym + MODDEF, module) ;
+	if (s != NULL) {
+		SModDef *d = (SModDef*) ftptr(&ftast, s->stmt);
+		assert(d->kind == SMODDEF);
+
+		Symbol *skel = searchtopdcl(modsym + MODSKEL, d->skeleton);
+		if (skel == NULL) {
+			ERR("The module <%s> define an undefined skeleton <%s>.", identstr(d->ident), identstr(d->skeleton));
+			return 0;
+		}
+		SModSkel *sk = (SModSkel*) ftptr(&ftast, skel->stmt);
+		assert(sk->kind == SMODSKEL);
+
+		*generics = d->generics;
+		*signature = sk->signature;
+		return 1;
+	}
+
+	ERR("The module <%s> is undefined.", identstr(module));
+	return 0;
+}
+
+Bool
+analyzemodimpl(SModImpl *impl)
+{
+	// search the module signature.
+	Symbol *s = searchtopdcl(modsym + MODSIGN, impl->signature);
+	if (s == NULL) {
+		ERR("Impl of <%s> an undefined signature <%s>", identstr(impl->ident), identstr(impl->signature));
+		return 0;
+	}
+	SModSign *sign = (SModSign*) ftptr(&ftast, s->stmt);
+	assert(sign->kind == SMODSIGN && "MODSIGN Table must contain only mod signatures");
+
+	// Verify generics.
+	SGenerics *g1 = NULL;
+	SGenerics *g2 = NULL;
+
+	if (impl->generics != -1) {
+		g1 = (SGenerics*) ftptr(&ftast, impl->generics);
+	}
+
+	if (sign->generics != -1) {
+		g2 = (SGenerics*) ftptr(&ftast, sign->generics);
+	}
+
+	if ((g1 == NULL || g2 == NULL) && g1 != g2) {
+		ERR("Incompatible generics of <%s> with its signature <%s>.", identstr(impl->ident), identstr(impl->signature));
+		return 0;
+	}
+
+	if (g1 != NULL) {
+		if (g1->ngen != g2->ngen) {
+			ERR("Incompatible generics of <%s> with its signature <%s>.", identstr(impl->ident), identstr(impl->signature));
+			return 0;
+		}
+
+		// Build the conversion table, gentype -> real type.
+		intptr *t1 = (intptr*) ftptr(&ftast, g1->generics);
+		intptr *t2 = (intptr*) ftptr(&ftast, g2->generics);
+
+		{
+			int i = 0;
+			impl->convtab = ftalloc(&ftast, sizeof(SConv));
+			impl->nconv = g1->ngen;
+			SConv *c = (SConv*) ftptr(&ftast, impl->convtab);
+
+			for (; i < g1->ngen; i++) {
+				if (!istypedefined(t1[i])) {
+					ERR("In <%s> the type <%s> is used but never defined.", identstr(impl->ident), identstr(t1[i]));
+					return 0;
+				}
+
+				c[i].real = t1[i];
+				c[i].gen = t2[i];
+				(void) ftalloc(&ftast, sizeof(SConv));
+			}
+		}
+	}
+
+
+	// Verify the modules.
+	SSignatures *s1 = NULL;
+	SSignatures *s2 = NULL;
+
+	if (impl->modules != -1) {
+		s1 = (SSignatures*) ftptr(&ftast, impl->modules);
+	}
+
+	if (sign->signatures != -1) {
+		s2 = (SSignatures*) ftptr(&ftast, sign->signatures);
+	}
+
+	if ((s1 == NULL || s2 == NULL) && s1 != s2) {
+		ERR("Incompatible modules of <%s> with its signature <%s>.", identstr(impl->ident), identstr(impl->signature));
+		return 0;
+	}
+
+	if (s1 != NULL) {
+		TODO("Accept the module params in an implementation.");
+		if (s1->nsign != s2->nsign) {
+			ERR("Incompatible modules of <%s> with its signature <%s>.", identstr(impl->ident), identstr(impl->signature));
+			return 0;
+		}
+
+		SSignature *ss1 = (SSignature*) ftptr(&ftast, s1->signs);
+		SSignature *ss2 = (SSignature*) ftptr(&ftast, s2->signs);
+		for (int i = 0; i < s1->nsign; i++) {
+			if (ss1->ident != ss2->ident) {
+				ERR("The %d module params are incompatible <%s> != <%s>", i, identstr(ss1->ident), identstr(ss2->ident));
+				ERR("Incompatible module params of <%s> with its signature <%s>.", identstr(impl->ident), identstr(impl->signature));
+				return 0;
+			}
+
+			intptr mgen = -1;
+			intptr msign = -1;
+			// search module...
+			if (!getmodinfo(ss1[i].signature, &mgen, &msign)) {
+				ERR("Implementing <%s> with the undefined module <%s>.", identstr(impl->ident), identstr(ss1[i].signature));
+				return 0;
+			}
+
+			// verify module signature
+			if (ss2[i].signature != msign) {
+				ERR("In <%s> using <%s: %s> as the signature type of <%s> but <%s> is required.", identstr(impl->ident), identstr(ss1[i].ident), identstr(ss1[i].signature), identstr(msign), identstr(ss2[i].signature));
+				return 0;
+			}
+			
+			// verify module generics
+			SGenerics *ss2gen = NULL;
+			if (ss2[i].generics != -1) {
+				ss2gen = (SGenerics*) ftptr(&ftast, ss2[i].generics);
+			}
+
+			SGenerics *mgengen = NULL;
+			if (mgen != -1) {
+				mgengen = (SGenerics*) ftptr(&ftast, mgen);
+			}
+
+			if ((ss2gen == NULL || mgengen == NULL) && ss2gen != mgengen) {
+				ERR("In <%s> using <%s: %s> as the signature type of <%s> but generics can't match signatures", identstr(impl->ident), identstr(ss1[i].ident), identstr(ss1[i].signature), identstr(msign));
+				return 0;
+			}
+
+			if (ss2gen != NULL) {
+				if (ss2gen->ngen != mgengen->ngen) {
+					ERR("In <%s> using <%s: %s> as the signature type of <%s> but generics can't match signatures", identstr(impl->ident), identstr(ss1[i].ident), identstr(ss1[i].signature), identstr(msign));
+					return 0;
+				}
+
+				intptr *t1 = (intptr*) ftptr(&ftast, mgengen->generics);
+				intptr *t2 = (intptr*) ftptr(&ftast, ss2gen->generics);
+				for (int j = 0; j < ss2gen->ngen; j++) {
+					if (!(searchreal(impl->convtab, impl->nconv, t2[j]) == t1[j])) {
+						ERR("In <%s> using <%s: %s> as the signature type of <%s> but generics can't match signatures", identstr(impl->ident), identstr(ss1[i].ident), identstr(ss1[i].signature), identstr(msign));
+						return 0;
+					}
+				}
+			}
+		}
+
+	}
+
+	TODO("Analyze stmts");
+	ERR("Not implemented yet.");
+	return 0;
 }
 

@@ -48,4 +48,5 @@ Bool analyzetype(SStruct *stmt);
 Bool analyzeglobalcst(SDecl *decl, int nelem);
 Bool analyzefun(SFun *fun, intptr stmt, int nsym);
 Bool analyzemodsign(SModSign *sign);
+Bool analyzemodimpl(SModImpl *impl);
 #endif /* ANALYSE_H */

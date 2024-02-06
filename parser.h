@@ -161,8 +161,13 @@ typedef struct {
 
 	// Generic params:
 	intptr generics;
+
 	// Module params:
 	intptr modules;
+
+	// Conv table:
+	intptr convtab; // [SConv]
+	int nconv;
 
 	// Stmts:
 	int nstmt;
@@ -189,8 +194,13 @@ typedef struct {
 
 	// Generic params:
 	intptr generics;
+
 	// Module params:
 	intptr modules;
+
+	// Conv table:
+	intptr convtab; // [SConv]
+	int nconv;
 
 	// Impl what:
 	intptr skeleton;
@@ -211,6 +221,11 @@ typedef struct {
 	int nsign;
 	intptr signs; // -> SSignature*
 } SSignatures;
+
+typedef struct {
+	intptr gen;
+	intptr real;
+} SConv;
 
 // -------------------- Expression
 

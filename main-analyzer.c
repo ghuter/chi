@@ -173,9 +173,13 @@ main(int argc, char *argv[])
 
 	Symbol *sym1 = (Symbol*) ftptr(&ftsym, modsym[MODSIGN].array);
 	assert(sym1 != NULL);
-
 	SModSign *s = (SModSign*) ftptr(&ftast, sym1->stmt);
 	analyzemodsign(s);
+
+	sym1 = (Symbol*) ftptr(&ftsym, modsym[MODIMPL].array);
+	assert(sym1 != NULL);
+	SModImpl *i = (SModImpl*) ftptr(&ftast, sym1->stmt);
+	analyzemodimpl(i);
 
 	for (int i = 0; i < NMODSYM; i++) {
 		printsymbols(modsym + i);

@@ -196,7 +196,8 @@ static int parse_otherop(const ETok *t, const ETok *eoe, intptr *expr);
 static int parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt);
 
 static void
-printptrlvl(FILE *fd, int ptrlvl) {
+printptrlvl(FILE *fd, int ptrlvl)
+{
 	while (ptrlvl-- > 0) {
 		fprintf(fd, "^");
 	}
@@ -267,6 +268,21 @@ printsignatures(FILE *fd, intptr signatures)
 		}
 	}
 	fprintf(fd, ")");
+}
+
+static void
+printconvtab(FILE *fd, intptr convtab, int nconv)
+{
+	if (nconv > 0) {
+		SConv *c = (SConv*) ftptr(&ftast, convtab);
+		fprintf(fd, "|");
+		for (int i = 0; i < nconv; i++) {
+			fprintf(fd, " %s => %s |", identstr(c[i].gen), identstr(c[i].real));	
+		}
+		return;
+	}
+
+	fprintf(fd, "| |");
 }
 
 void
@@ -422,6 +438,9 @@ printstmt(FILE *fd, intptr stmt)
 		printgenerics(fd, s->generics);
 		fprintf(fd, ", ");
 		printsignatures(fd, s->modules);
+		fprintf(fd, ", ");
+		printconvtab(fd, s->convtab, s->nconv);
+
 		fprintf(fd, ", {");
 		intptr *stmt = (intptr*) ftptr(&ftast, s->stmts);
 		for (int i = 0; i < s->nstmt; i++) {
@@ -452,9 +471,10 @@ printstmt(FILE *fd, intptr stmt)
 		fprintf(fd, "%s(%s, ", stmtstrs[*ptr], identstr(s->ident));
 		printgenerics(fd, s->generics);
 		fprintf(fd, ", ");
-		printgenerics(fd, s->generics);
-		fprintf(fd, ", ");
 		printsignatures(fd, s->modules);
+		fprintf(fd, ", ");
+		printconvtab(fd, s->convtab, s->nconv);
+
 		fprintf(fd, ") : ");
 		printtype(fd, s->skeleton, -1);
 		return;
@@ -1255,7 +1275,7 @@ parse_stmts(const ETok *t, intptr *stmtlst, int *nstmt)
 		*nstmt += 1;
 	}
 	// consume `}`
-	i++; 
+	i++;
 
 	*stmtlst = ftalloc(&ftast, sizeof(intptr) * *nstmt);
 	intptr *array = (intptr*) ftptr(&ftast, *stmtlst);
@@ -1290,7 +1310,7 @@ parse_signature_params(const ETok *t, intptr *signatures)
 		i++;
 		ident = t[i];
 		i++;
-		
+
 		if (t[i] != COLON) {
 			ERR("Found: <%s> but expects: `( [<IDENTIFIER> : <IDENTIFIER> [ `[` <IDENTIFIER> [, IDENTIFIER]* `]`] ]+ `)`", tokenstrs[t[i]]);
 			return -1;
@@ -1360,7 +1380,7 @@ parse_toplevel_signature(const ETok *t, const intptr ident, intptr *stmt)
 	}
 	i += res;
 
-	res = parse_signature_params(t +i, &signatures);
+	res = parse_signature_params(t + i, &signatures);
 	if (res < 0) {
 		ERR("Error when parsing the signature params of a signature.");
 		return -1;
@@ -1395,7 +1415,7 @@ parse_toplevel_impl(const ETok *t, const intptr ident, intptr *stmt)
 	intptr generics = -1;
 	intptr modules = -1;
 	intptr signature = -1;
-	intptr stmtlst = -1; 
+	intptr stmtlst = -1;
 	int nstmt = 0;
 
 	if (t[i] != IDENTIFIER) {
@@ -1437,6 +1457,8 @@ parse_toplevel_impl(const ETok *t, const intptr ident, intptr *stmt)
 	s->modules = modules;
 	s->nstmt = nstmt;
 	s->stmts = stmtlst;
+	s->convtab = -1;
+	s->nconv = 0;
 
 	return i;
 }
@@ -1448,7 +1470,7 @@ parse_toplevel_skeleton(const ETok *t, const intptr ident, intptr *stmt)
 	int res = -1;
 
 	intptr signature = -1;
-	intptr stmtlst = -1; 
+	intptr stmtlst = -1;
 	int nstmt = 0;
 
 	if (t[i] != IDENTIFIER) {
@@ -1503,7 +1525,7 @@ parse_toplevel_define(const ETok *t, const intptr ident, intptr *stmt)
 	}
 	i += res;
 
-	res = parse_signature_params(t +i, &modules);
+	res = parse_signature_params(t + i, &modules);
 	if (res < 0) {
 		ERR("Error when parsing the signature params of a definition.");
 		return -1;
@@ -1523,6 +1545,8 @@ parse_toplevel_define(const ETok *t, const intptr ident, intptr *stmt)
 	s->skeleton = skeleton;
 	s->generics = generics;
 	s->modules = modules;
+	s->convtab = -1;
+	s->nconv = 0;
 	return i;
 }
 
@@ -2425,13 +2449,13 @@ parse_tokens(const ETok *t, Symbols *signatures, Symbols *identsym, Symbols *typ
 		}
 		case SMODDEF:
 			add++;
-			// fallthrough
+		// fallthrough
 		case SMODSKEL:
 			add++;
-			// fallthrough
+		// fallthrough
 		case SMODIMPL:
 			add++;
-			// fallthrough
+		// fallthrough
 		case SMODSIGN: {
 			ident = ((SModDef*) stmtptr)->ident;
 			res = inserttopdcl(modsym + add, ident, stmt);
