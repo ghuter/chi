@@ -39,8 +39,10 @@ extern Symbols funsym;
 extern Symbols identsym;
 extern Symbols typesym;
 extern Symbols signatures;
-extern SymInfo *syminfo;
 extern Symbols modsym[NMODSYM];
+extern SymInfo *syminfo;
+extern int nsym;
+
 
 const char* langtypestrs[NLANGTYPE] = {
 	[BOOL] = "bool",
@@ -256,8 +258,8 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 	},
 };
 
-Bool computeconstype(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo);
-Bool analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym);
+static Bool computeconstype(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo);
+static Bool analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym);
 
 void
 printsymbols(Symbols *syms)
@@ -291,7 +293,7 @@ printsymbolsinfo(int nsym)
 	}
 }
 
-Symbol*
+static Symbol*
 searchtopdcl(Symbols *syms, intptr ident)
 {
 	Symbol *sym = (Symbol*) ftptr(&ftsym, syms->array);
@@ -304,7 +306,7 @@ searchtopdcl(Symbols *syms, intptr ident)
 	return NULL;
 }
 
-Bool
+static Bool
 existstopdcl(Symbols *syms, intptr ident)
 {
 	Symbol *sym = (Symbol*) ftptr(&ftsym, syms->array);
@@ -316,7 +318,7 @@ existstopdcl(Symbols *syms, intptr ident)
 	return 0;
 }
 
-Bool
+static Bool
 insertsyminfo(int nsym, int block, SDecl *decl)
 {
 	for (int i = nsym; i > block; i--) {
@@ -334,7 +336,7 @@ insertsyminfo(int nsym, int block, SDecl *decl)
 	return 1;
 }
 
-SymInfo*
+static SymInfo*
 searchsyminfo(int nsym, intptr ident)
 {
 	for (int i = nsym - 1; i >= 0; i--) {
@@ -347,7 +349,7 @@ searchsyminfo(int nsym, intptr ident)
 }
 
 
-SMember*
+static SMember*
 searchmember(intptr members, int nmember, intptr ident)
 {
 	SMember *member = (SMember*) ftptr(&ftast, members);
@@ -360,7 +362,7 @@ searchmember(intptr members, int nmember, intptr ident)
 }
 
 
-Bool
+static Bool
 promotion(intptr type1, int ptrlvl1, intptr type2, int ptrlvl2, int *rtype, intptr *rptrlvl)
 {
 	// pointer + any langtype
@@ -437,7 +439,7 @@ getstructfield(SStruct *st, intptr ident)
 	return NULL;
 }
 
-Bool
+static Bool
 computeconstype(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo)
 {
 	UnknownExpr *unknown = (UnknownExpr*) ftptr(&ftast, expr);
@@ -513,7 +515,7 @@ computeconstype(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo)
 	return 0;
 }
 
-Bool
+static Bool
 istypedefined(intptr type)
 {
 	return ((typeoffset <= type) && (type <= typeend))
@@ -562,7 +564,7 @@ analyzeglobalcst(SDecl *decl, int nelem)
 	return 1;
 }
 
-Bool
+static Bool
 analyzebinop(EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
 {
 	intptr type1 = -1;
@@ -697,7 +699,7 @@ analyzebinop(EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 	return 0;
 }
 
-Bool
+static Bool
 analyzeunop(EUnop *unop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
 {
 	switch (unop->op) {
@@ -762,7 +764,7 @@ analyzeunop(EUnop *unop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
 	return 0;
 }
 
-Bool
+static Bool
 analyzestruct(EStruct *st, intptr *type, int nsym)
 {
 	*type = st->ident;
@@ -796,7 +798,7 @@ analyzestruct(EStruct *st, intptr *type, int nsym)
 	return 1;
 }
 
-Bool
+static Bool
 analyzecall(ECall *call, intptr *type, int *ptrlvl, int nsym)
 {
 	Mem* expr = (Mem*) ftptr(&ftast, call->expr);
@@ -844,7 +846,7 @@ analyzecall(ECall *call, intptr *type, int *ptrlvl, int nsym)
 	return 1;
 }
 
-Bool
+static Bool
 analyzeaccess(EAccess *ac, intptr *type, int *ptrlvl, int nsym)
 {
 	INFO("analyzeaccess");
@@ -889,7 +891,7 @@ analyzeaccess(EAccess *ac, intptr *type, int *ptrlvl, int nsym)
 	return 1;
 }
 
-Bool
+static Bool
 analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
 {
 	int res = 0;
@@ -981,7 +983,7 @@ analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 	return 0;
 }
 
-Bool
+static Bool
 analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 {
 	UnknownStmt *unknown = (UnknownStmt*) ftptr(&ftast, stmt);
@@ -1292,7 +1294,7 @@ searchmod(intptr ident, EModSym mod)
 	return NULL;
 }
 
-Bool
+static Bool
 issignatureequivalent(SSignature *s, SModSign *sign)
 {
 	SGenerics *g1 = (SGenerics*) ftptr(&ftast, s->generics);
@@ -1304,7 +1306,7 @@ issignatureequivalent(SSignature *s, SModSign *sign)
 	return 0;
 }
 
-Bool
+static Bool
 existgenerics(SGenerics *g, intptr ident)
 {
 	if (g == NULL) {
@@ -1320,7 +1322,7 @@ existgenerics(SGenerics *g, intptr ident)
 	return 0;
 }
 
-Bool
+static Bool
 g1containsg2(SGenerics *g1, SGenerics *g2)
 {
 	if (g1 == NULL) {
@@ -1338,7 +1340,7 @@ g1containsg2(SGenerics *g1, SGenerics *g2)
 	return 1;
 }
 
-Bool
+static Bool
 sign_is_generic_defined(SGenerics *g1, SSignature *s)
 {
 	Symbol *sym = searchmod(s->signature, MODSIGN);
@@ -1369,7 +1371,7 @@ sign_is_generic_defined(SGenerics *g1, SSignature *s)
 	return 1;
 }
 
-Bool
+static Bool
 sign_are_generics_defined(intptr generics, intptr signatures)
 {
 	// No signatures
@@ -1396,7 +1398,7 @@ sign_are_generics_defined(intptr generics, intptr signatures)
 	return 1;
 }
 
-Bool
+static Bool
 sign_is_type_exist(SModSign *s, SGenerics *g, intptr ident, int ptrlvl, Bool verifyptrlvl)
 {
 	(void) s;
@@ -1416,7 +1418,7 @@ sign_is_type_exist(SModSign *s, SGenerics *g, intptr ident, int ptrlvl, Bool ver
 	return 0;
 }
 
-Bool
+static Bool
 sign_analyze_stmt(SModSign *sign, SGenerics *g, intptr stmt)
 {
 	UnknownStmt *unknown = (UnknownStmt*) ftptr(&ftast, stmt);
@@ -1493,7 +1495,7 @@ analyzemodsign(SModSign *sign)
 	return 1;
 }
 
-intptr
+static intptr
 searchreal(intptr convtab, int nconv, intptr generic)
 {
 	SConv *c = (SConv*) ftptr(&ftast, convtab);
@@ -1507,7 +1509,7 @@ searchreal(intptr convtab, int nconv, intptr generic)
 	return -1;
 }
 
-Bool
+static Bool
 getmodinfo(intptr module, intptr *generics, intptr *signature)
 {
 	Symbol *s = NULL;
@@ -1543,19 +1545,9 @@ getmodinfo(intptr module, intptr *generics, intptr *signature)
 	return 0;
 }
 
-Bool
-analyzemodimpl(SModImpl *impl)
+static Bool
+impl_verify_generics(SModImpl *impl, SModSign *sign)
 {
-	// search the module signature.
-	Symbol *s = searchtopdcl(modsym + MODSIGN, impl->signature);
-	if (s == NULL) {
-		ERR("Impl of <%s> an undefined signature <%s>", identstr(impl->ident), identstr(impl->signature));
-		return 0;
-	}
-	SModSign *sign = (SModSign*) ftptr(&ftast, s->stmt);
-	assert(sign->kind == SMODSIGN && "MODSIGN Table must contain only mod signatures");
-
-	// Verify generics.
 	SGenerics *g1 = NULL;
 	SGenerics *g2 = NULL;
 
@@ -1600,9 +1592,12 @@ analyzemodimpl(SModImpl *impl)
 			}
 		}
 	}
+	return 1;
+}
 
-
-	// Verify the modules.
+static Bool
+impl_verify_module(SModImpl *impl, SModSign *sign)
+{
 	SSignatures *s1 = NULL;
 	SSignatures *s2 = NULL;
 
@@ -1681,11 +1676,158 @@ analyzemodimpl(SModImpl *impl)
 				}
 			}
 		}
+	}
+	return 1;
+}
 
+static Bool
+impl_analyzefun(intptr convtab, int nconv, SFun *impl, SSign *sign)
+{
+	if (impl->ident != sign->ident) {
+		ERR("Expects the functions in the same order in the impl and in the signature.");
+		return 0;
+	}
+	int signtype = istypedefined(sign->type) ? sign->type : searchreal(convtab, nconv, sign->type);
+	assert(signtype > 0 && "Unreachable assert.");
+
+	if (signtype != impl->type || impl->ptrlvl != sign->ptrlvl) {
+		ERR("Incompatible return type in <%s>, signature <%s ptrlvl(%d)> impl <%s ptrlvl(%d)>.",
+		 identstr(impl->ident), identstr(sign->type), sign->ptrlvl, identstr(impl->type), impl->ptrlvl);
+		return 0;
 	}
 
-	TODO("Analyze stmts");
-	ERR("Not implemented yet.");
+	if (sign->nparam != impl->nparam) {
+		ERR("Incompatible number of param in <%s>.", identstr(impl->ident));
+		return 0;
+	}
+
+	SMember *m1 = (SMember*) ftptr(&ftast, impl->params);
+	SMember *m2 = (SMember*) ftptr(&ftast, sign->params);
+	int localnsym = nsym;
+	for (int i = 0; i < impl->nparam; i++) {
+		if (m1[i].ident != m2[i].ident) {
+			ERR("Incompatible param identifier in <%s>, <%s> != <%s>.", identstr(impl->ident), identstr(m1[i].ident), identstr(m2[i].ident));
+			return 0;
+		}
+
+		int signtype = istypedefined(m2[i].type) ? m2[i].type : searchreal(convtab, nconv, m2[i].type);
+		assert(signtype > 0 && "Unreachable assert.");
+		if (signtype != m1[i].type || m1[i].ptrlvl != m2[i].ptrlvl) {
+			ERR("Incompatible param type in <%s> of <%s>, signature <%s ptrlvl(%d)> impl <%s ptrlvl(%d)>.",
+			 identstr(impl->ident), identstr(m1[i].ident), identstr(m2[i].type), m2[i].ptrlvl, identstr(m1[i].type), m1[i].ptrlvl);
+			return 0;
+		}
+		syminfo[localnsym].type = m1[i].type;
+		syminfo[localnsym].ptrlvl = m1[i].ptrlvl;
+		syminfo[localnsym].ident = m1[i].ident;
+		localnsym++;
+	}
+
+	if (!analyzefunstmt(impl, &localnsym, localnsym, impl->stmt)) {
+		ERR("Error when analyzing fun stmt in an implementation.");
+		return 0;
+	}
+
+	// Analyze function stmt
+	return 1;
+}
+
+static Bool
+impl_verify_stmts(SModImpl *impl, SModSign *sign)
+{
+	if (impl->nstmt > sign->nstmt) {
+		ERR("There is more stmt in the the implementation than in the signature.");
+		return 0;
+	}
+
+	intptr *stmt1 = (intptr*) ftptr(&ftast, impl->stmts);
+	intptr *stmt2 = (intptr*) ftptr(&ftast, sign->stmts);
+
+	int i2 = 0;
+	for (int i1 = 0; i1 < impl->nstmt; i1++) {
+
+		SSign *f2 = (SSign*) ftptr(&ftast, stmt2[i2]);
+		while (f2->kind != SSIGN) {
+			i2++;
+			f2 = (SFun*) ftptr(&ftast, stmt2[i2]);
+			if (i2 >= sign->nstmt) {
+				ERR("Statements of the impl are incompatible with the statements of the signature.");
+				return 0;
+			}
+		}
+
+		SFun *f1 = (SFun*) ftptr(&ftast, stmt1[i1]);
+		if (f1->kind != SFUN) {
+			ERR("Unexpected statement <%s> in an impl.", stmtstrs[f1->kind]);
+			return 0;
+		}
+
+		// Verify function
+		if (!impl_analyzefun(impl->convtab, impl->nconv, f1, f2)) {
+			ERR("Incompatible functions.");
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
+Bool
+analyzemodimpl(SModImpl *impl)
+{
+	// Search the module signature.
+	Symbol *s = searchtopdcl(modsym + MODSIGN, impl->signature);
+	if (s == NULL) {
+		ERR("Impl of <%s> an undefined signature <%s>", identstr(impl->ident), identstr(impl->signature));
+		return 0;
+	}
+	SModSign *sign = (SModSign*) ftptr(&ftast, s->stmt);
+	assert(sign->kind == SMODSIGN && "MODSIGN Table must contain only mod signatures");
+
+	// Verify the generics.
+	if (!impl_verify_generics(impl, sign)) {
+		ERR("Error when analyzing <%s>.", identstr(impl->ident));
+		return 0;
+	}
+
+	// Verify the modules.
+	if(!impl_verify_module(impl, sign)) {
+		ERR("Error when analyzing <%s>.", identstr(impl->ident));
+		return 0;
+	}
+
+	// Verify the stmts.
+	if(!impl_verify_stmts(impl, sign)) {
+		ERR("Error when analyzing <%s>.", identstr(impl->ident));
+		return 0;
+	}
+	
+	return 1;
+}
+
+Bool
+analyzemodskeleton(SModSkel *skel)
+{
+	// Verify the existance of the signature.
+	Symbol *s = searchtopdcl(modsym + MODSIGN, skel->signature);
+	if (s == NULL) {
+		ERR("The skeleton <%s> use an undefined signature <%s>.", identstr(skel->ident), identstr(skel->signature));
+		return 0;
+	}
+
+	SModSign *sign = (SModSign*) ftptr(&ftast, s->stmt);
+	assert(sign->kind == SMODSIGN);
+
+	// verify stmts
+
+	TODO("analyzemodskeleton");
 	return 0;
 }
 
+Bool
+analyzemodefine(SModDef *def)
+{
+	(void) def;
+	TODO("analyzemodefine");
+	return 0;
+}
