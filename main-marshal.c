@@ -64,6 +64,7 @@ Symbols moddef  = {0};
 Symbols modsym[NMODSYM] = {0};
 
 SymInfo *syminfo = NULL;
+int nsym = 0;
 
 int fstlangtype = -1;
 int lstlangtype = -1;
@@ -145,7 +146,7 @@ main(int argc, char *argv[])
 	// -------------------- Analyzing
 	intptr info = ftalloc(&ftsym, sizeof(SymInfo) * pagesz);
 	syminfo = (SymInfo*) ftptr(&ftsym, info);
-	int nsym = 0;
+	nsym = 0;
 
 	Symbol *sym = (Symbol*) ftptr(&ftsym, typesym.array);
 	for (int i = 0; i < typesym.nsym; i++) {
