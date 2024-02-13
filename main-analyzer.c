@@ -50,10 +50,11 @@ FatArena fttmp   = {0};
 FatArena ftast   = {0};
 FatArena ftsym   = {0};
 
-Symbols funsym     = {0};
-Symbols identsym   = {0};
-Symbols typesym    = {0};
-Symbols signatures = {0};
+Symbols funsym       = {0};
+Symbols identsym     = {0};
+Symbols typesym      = {0};
+Symbols signatures   = {0};
+Symbols genstructsym = {0};
 
 Symbols modsign = {0};
 Symbols modskul = {0};
@@ -94,10 +95,11 @@ main(int argc, char *argv[])
 	POK(ftnew(&ftast, 10 * pagesz) != 0, "fail to create a FatArena");
 	POK(ftnew(&ftsym, 100 * pagesz) != 0, "fail to create a FatArena");
 
-	identsym.array   = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
-	funsym.array     = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
-	typesym.array    = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
-	signatures.array = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	identsym.array     = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	funsym.array       = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	typesym.array      = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	signatures.array   = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	genstructsym.array = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
 
 	for (int i = 0; i < NMODSYM; i++) {
 		modsym[i].array = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
@@ -161,26 +163,41 @@ main(int argc, char *argv[])
 	}
 	printsymbolsinfo(nsym);
 
+	Symbol *symsign = (Symbol*) ftptr(&ftsym, modsym[MODSIGN].array);
+	for (int i = 0; i < modsym[MODSIGN].nsym; i++) {
+		SModSign *s = (SModSign*) ftptr(&ftast, symsign[i].stmt);
+		analyzemodsign(s);
+	}
+
+	Symbol *symimpl = (Symbol*) ftptr(&ftsym, modsym[MODIMPL].array);
+	for (int i = 0; i < modsym[MODIMPL].nsym; i++) {
+		SModImpl *s = (SModImpl*) ftptr(&ftast, symimpl[i].stmt);
+		analyzemodimpl(s);
+	}
+
+	Symbol *symskel = (Symbol*) ftptr(&ftsym, modsym[MODSKEL].array);
+	for (int i = 0; i < modsym[MODSKEL].nsym; i++) {
+		SModSkel *s = (SModSkel*) ftptr(&ftast, symskel[i].stmt);
+		analyzemodskel(s);
+	}
+
+	Symbol *symdef = (Symbol*) ftptr(&ftsym, modsym[MODDEF].array);
+	for (int i = 0; i < modsym[MODDEF].nsym; i++) {
+		SModDef *s = (SModDef*) ftptr(&ftast, symdef[i].stmt);
+		analyzemoddef(s);
+	}
+
+
 	Symbol *symf = (Symbol*) ftptr(&ftsym, signatures.array);
 	for (int i = 0; i < signatures.nsym; i++) {
 		intptr stmt = symf[i].stmt;
 		SFun* fun = (SFun*) ftptr(&ftast, stmt);
-		assert(analyzefun(fun, stmt, nsym));
+		assert(analyzefun(NULL, fun, stmt, nsym));
 	}
 
 	printsymbols(&typesym);
 	printsymbols(&identsym);
 	printsymbols(&funsym);
-
-	Symbol *sym1 = (Symbol*) ftptr(&ftsym, modsym[MODSIGN].array);
-	assert(sym1 != NULL);
-	SModSign *s = (SModSign*) ftptr(&ftast, sym1->stmt);
-	analyzemodsign(s);
-
-	sym1 = (Symbol*) ftptr(&ftsym, modsym[MODIMPL].array);
-	assert(sym1 != NULL);
-	SModImpl *i = (SModImpl*) ftptr(&ftast, sym1->stmt);
-	analyzemodimpl(i);
 
 	for (int i = 0; i < NMODSYM; i++) {
 		printsymbols(modsym + i);

@@ -10,6 +10,13 @@ typedef struct {
 	Bool cst;
 } SymInfo;
 
+// -------------------- Analyze context
+
+typedef struct {
+	SModSign *sign;
+	SModImpl *impl;
+} AnalyzeCtx;
+
 // -------------------- System types
 
 typedef enum {
@@ -46,7 +53,9 @@ void printsymbols(Symbols *syms);
 void printsymbolsinfo(int nsym);
 Bool analyzetype(SStruct *stmt);
 Bool analyzeglobalcst(SDecl *decl, int nelem);
-Bool analyzefun(SFun *fun, intptr stmt, int nsym);
+Bool analyzefun(AnalyzeCtx *ctx, SFun *fun, intptr stmt, int nsym);
 Bool analyzemodsign(SModSign *sign);
 Bool analyzemodimpl(SModImpl *impl);
+Bool analyzemodskel(SModSkel *skel);
+Bool analyzemoddef(SModDef *def);
 #endif /* ANALYSE_H */

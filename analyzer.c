@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <ctype.h>
 
 #include "token.h"
 #include "lib/fatarena.h"
@@ -31,6 +32,16 @@
 #define islangtype(_type) ((typeoffset <= _type) && (_type <= typeend))
 #define identstr(_ident) ((char*) ftptr(&ftident, _ident))
 
+#define getrealtype(_type, _convtab, _nconv, _realtype)  \
+	if (isgeneric(_type)) {                              \
+		assert(_convtab != -1);                          \
+		_realtype = searchreal(_convtab,                 \
+							   _nconv,                   \
+							   _type);                   \
+	} else {                                             \
+		_realtype = _type;                               \
+	}
+
 extern int typeoffset;
 extern int typeend;
 extern int ident2langtype[NLANGTYPE * 3];
@@ -39,6 +50,7 @@ extern Symbols funsym;
 extern Symbols identsym;
 extern Symbols typesym;
 extern Symbols signatures;
+extern Symbols genstructsym;
 extern Symbols modsym[NMODSYM];
 extern SymInfo *syminfo;
 extern int nsym;
@@ -259,7 +271,7 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 };
 
 static Bool computeconstype(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo);
-static Bool analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym);
+static Bool analyzefunexpr(AnalyzeCtx *ctx, intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym);
 
 void
 printsymbols(Symbols *syms)
@@ -303,6 +315,53 @@ searchtopdcl(Symbols *syms, intptr ident)
 		}
 	}
 
+	return NULL;
+}
+
+static intptr
+searchreal(intptr convtab, int nconv, intptr generic)
+{
+	SConv *c = (SConv*) ftptr(&ftast, convtab);
+	if (c == NULL) {
+		return -1;
+	}
+
+	for (int i = 0; i < nconv; i++) {
+		if (c[i].gen == generic) {
+			return c[i].real;
+		}
+	}
+
+	return -1;
+}
+
+static SFun*
+searchfun(intptr stmts, int nstmt, intptr ident)
+{
+	intptr *stmt = (intptr*) ftptr(&ftast, stmts);
+	for (int i = 0; i < nstmt; i++) {
+		SFun *fun = (SFun*) ftptr(&ftast, stmt[i]);
+		if (fun->kind == SFUN) { 
+			if (fun->ident == ident) {
+				return fun;
+			}
+		}
+	}
+	return NULL;
+}
+
+static SSign*
+searchsig(intptr stmts, int nstmt, intptr ident)
+{
+	intptr *stmt = (intptr*) ftptr(&ftast, stmts);
+	for (int i = 0; i < nstmt; i++) {
+		SSign *fun = (SSign*) ftptr(&ftast, stmt[i]);
+		if (fun->kind == SSIGN) { 
+			if (fun->ident == ident) {
+				return fun;
+			}
+		}
+	}
 	return NULL;
 }
 
@@ -356,6 +415,19 @@ searchmember(intptr members, int nmember, intptr ident)
 	for (int i = 0; i < nmember; i++) {
 		if (member[i].ident == ident) {
 			return member + i;
+		}
+	}
+	return NULL;
+}
+
+static SStruct*
+searchgenstruct(SModSign *sign, intptr ident)
+{
+	intptr *stmt = (intptr*) ftptr(&ftast, sign->stmts);
+	for (int i = 0; i < sign->nstmt; i++) {
+		SStruct *st = (SStruct*) ftptr(&ftast, stmt[i]);
+		if (st->kind == SSTRUCT && st->ident == ident) {
+			return st;
 		}
 	}
 	return NULL;
@@ -522,9 +594,21 @@ istypedefined(intptr type)
 	       || existstopdcl(&typesym, type);
 }
 
+static Bool
+isgeneric(intptr type)
+{
+	const char* str = identstr(type);
+	return isupper(str[0]) && str[1] == '\0';
+}
+
 Bool
 analyzetype(SStruct *stmt)
 {
+	if (isgeneric(stmt->ident)) {
+		ERR("Invalid struct name <%s>, one letter upper names are reserved for generic names.", identstr(stmt->ident));
+		return 0;
+	}
+
 	SMember *members = (SMember*) ftptr(&ftast, stmt->members);
 	for (int i = 0; i < stmt->nmember; i++) {
 		intptr type = members[i].type;
@@ -565,7 +649,7 @@ analyzeglobalcst(SDecl *decl, int nelem)
 }
 
 static Bool
-analyzebinop(EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
+analyzebinop(AnalyzeCtx *ctx, EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
 {
 	intptr type1 = -1;
 	int ptrlvl1 = 0;
@@ -582,12 +666,12 @@ analyzebinop(EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 	case OP_SUB:
 		INFO("Normal ops");
 
-		if (!analyzefunexpr(binop->left, &type1, &ptrlvl1, typeinfo, nsym)) {
+		if (!analyzefunexpr(ctx, binop->left, &type1, &ptrlvl1, typeinfo, nsym)) {
 			ERR("Error when computing the type of a const declaration binop.");
 			return 0;
 		}
 
-		if (!analyzefunexpr(binop->right, &type2, &ptrlvl2, typeinfo, nsym)) {
+		if (!analyzefunexpr(ctx, binop->right, &type2, &ptrlvl2, typeinfo, nsym)) {
 			ERR("Error when computing the type of a const declaration binop.");
 			return 0;
 		}
@@ -620,12 +704,12 @@ analyzebinop(EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 	case OP_BNOT:
 	case OP_LNOT:
 		INFO("compare ops");
-		if (!analyzefunexpr(binop->left, &type1, &ptrlvl1, -1, nsym)) {
+		if (!analyzefunexpr(ctx, binop->left, &type1, &ptrlvl1, -1, nsym)) {
 			ERR("Error when computing the type of a const declaration binop.");
 			return 0;
 		}
 
-		if (!analyzefunexpr(binop->right, &type2, &ptrlvl2, -1, nsym)) {
+		if (!analyzefunexpr(ctx, binop->right, &type2, &ptrlvl2, -1, nsym)) {
 			ERR("Error when computing the type of a const declaration binop.");
 			return 0;
 		}
@@ -657,12 +741,12 @@ analyzebinop(EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 	case OP_BXOR:
 	case OP_BOR:
 		INFO("Bit ops");
-		if (!analyzefunexpr(binop->left, &type1, &ptrlvl1, typeinfo, nsym)) {
+		if (!analyzefunexpr(ctx, binop->left, &type1, &ptrlvl1, typeinfo, nsym)) {
 			ERR("Error when computing the type of a const declaration binop.");
 			return 0;
 		}
 
-		if (!analyzefunexpr(binop->right, &type2, &ptrlvl2, typeinfo, nsym)) {
+		if (!analyzefunexpr(ctx, binop->right, &type2, &ptrlvl2, typeinfo, nsym)) {
 			ERR("Error when computing the type of a const declaration binop.");
 			return 0;
 		}
@@ -700,7 +784,7 @@ analyzebinop(EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 }
 
 static Bool
-analyzeunop(EUnop *unop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
+analyzeunop(AnalyzeCtx *ctx, EUnop *unop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
 {
 	switch (unop->op) {
 	case UOP_SUB:
@@ -708,7 +792,7 @@ analyzeunop(EUnop *unop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
 	case UOP_LNOT:
 	//fallthrough
 	case UOP_BNOT: {
-		if (!analyzefunexpr(unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
+		if (!analyzefunexpr(ctx, unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
 			ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
 			return 0;
 		}
@@ -723,7 +807,7 @@ analyzeunop(EUnop *unop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
 		return 1;
 	}
 	case UOP_DEREF:
-		if (!analyzefunexpr(unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
+		if (!analyzefunexpr(ctx, unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
 			ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
 			return 0;
 		}
@@ -738,7 +822,7 @@ analyzeunop(EUnop *unop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
 
 		return 1;
 	case UOP_AT:
-		if (!analyzefunexpr(unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
+		if (!analyzefunexpr(ctx, unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
 			ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
 			return 0;
 		}
@@ -747,7 +831,7 @@ analyzeunop(EUnop *unop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
 
 		return 1;
 	case UOP_SIZEOF:
-		if (!analyzefunexpr(unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
+		if (!analyzefunexpr(ctx, unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
 			ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
 			return 0;
 		}
@@ -764,18 +848,91 @@ analyzeunop(EUnop *unop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
 	return 0;
 }
 
+static Symbol*
+searchstruct(AnalyzeCtx *ctx, intptr ident)
+{
+	Symbol *sym = searchtopdcl(&typesym, ident);
+	if (sym == NULL) {
+		sym = searchtopdcl(&genstructsym, ident);
+		if (sym == NULL) {
+			ERR("The struct <%s> is used but never declared.", identstr(ident));
+			return NULL;
+		}
+
+		if (ctx == NULL) {
+			ERR("The generic struct <%s> can't be initialized outside of it's module.", identstr(ident));
+			return NULL;
+		}
+
+		SStruct *gst = searchgenstruct(ctx->sign, ident);
+		if (gst == NULL) {
+			ERR("The generic struct <%s> ins't defined in the signature <%s>.", identstr(ident), identstr(ctx->sign->ident));
+			return NULL;
+		}
+	}
+	return sym;
+}
+
+static SModSign*
+searchmodsign(intptr realmod, intptr *convtab, int *nconv)
+{
+	// search among the impls.
+	Symbol *sym = searchtopdcl(modsym + MODIMPL, realmod);
+	// search among the definitions.
+	if (sym == NULL) {
+		sym = searchtopdcl(modsym + MODDEF, realmod);
+		if (sym == NULL) {
+			ERR("The signature <%s> is never declared.", identstr(realmod));
+			return 0;
+		}
+
+		SModDef *def = (SModDef*) ftptr(&ftast, sym->stmt);
+		assert(def->kind == SMODDEF);
+		sym = searchtopdcl(modsym + MODSKEL, def->skeleton);
+
+		if (sym == NULL) {
+			ERR("Error in the definition <%s>.", identstr(realmod));
+			return 0;
+		}
+
+		SModSkel *skel = (SModSkel*) ftptr(&ftast, sym->stmt);
+		assert(skel->kind == SMODSKEL);
+		sym = searchtopdcl(modsym + MODSIGN, skel->signature);
+
+		*convtab = def->convtab;
+		*nconv = def->nconv;
+	} else {
+		SModImpl *impl = (SModImpl*) ftptr(&ftast, sym->stmt);
+		assert(impl->kind == SMODIMPL);
+		sym = searchtopdcl(modsym + MODSIGN, impl->signature);
+
+		*convtab = impl->convtab;
+		*nconv = impl->nconv;
+	}
+
+	if (sym == NULL) {
+		ERR("Impossible to find the signature of the module <%s>.", identstr(realmod));
+		return 0;
+	}
+
+	SModSign *sign = (SModSign*) ftptr(&ftast, sym->stmt);
+	assert(sign->kind == SMODSIGN);
+
+	return sign;
+}
+
 static Bool
-analyzestruct(EStruct *st, intptr *type, int nsym)
+analyzestruct(AnalyzeCtx *ctx, EStruct *st, intptr *type, int nsym)
 {
 	*type = st->ident;
 
-	Symbol *sym = searchtopdcl(&typesym, st->ident);
+	Symbol *sym = searchstruct(ctx, st->ident);
 	if (sym == NULL) {
 		ERR("The struct <%s> is used but never declared.", identstr(st->ident));
 		return 0;
 	}
-	SStruct *sdecl = (SStruct*) ftptr(&ftast, sym->stmt);
 
+	SStruct *sdecl = (SStruct*) ftptr(&ftast, sym->stmt);
 	EElem *elem = (EElem*) ftptr(&ftast, st->elems);
 	for (int i = 0; i < st->nelem; i++) {
 		SMember* m = getstructfield(sdecl, elem->ident);
@@ -784,13 +941,20 @@ analyzestruct(EStruct *st, intptr *type, int nsym)
 			return 0;
 		}
 
-		if (!analyzefunexpr(elem->expr, &elem->type, &elem->ptrlvl, m->type, nsym)) {
+		intptr realtype = m->type;
+		if (ctx != NULL && ctx->impl != NULL) {
+			getrealtype(m->type, ctx->impl->convtab, ctx->impl->nconv, realtype);
+			assert(realtype > 0);
+		}
+
+		if (!analyzefunexpr(ctx, elem->expr, &elem->type, &elem->ptrlvl, realtype, nsym)) {
 			ERR("Error when computing the type of a struct expression.");
 			return 0;
 		}
 
-		if (m->type != elem->type || m->ptrlvl != elem->ptrlvl) {
-			ERR("The struct field <%s.%s> needs <%s> but it found <%s>", identstr(st->ident), identstr(elem->ident), identstr(m->type), identstr(elem->type));
+		if (realtype != elem->type || m->ptrlvl != elem->ptrlvl) {
+			ERR("The struct field <%s.%s> needs <%s ptrlvl(%d)> but it found <%s ptrlvl(%d)>",
+			    identstr(st->ident), identstr(elem->ident), identstr(realtype), m->ptrlvl, identstr(elem->type), elem->ptrlvl);
 			return 0;
 		}
 		elem++;
@@ -799,12 +963,304 @@ analyzestruct(EStruct *st, intptr *type, int nsym)
 }
 
 static Bool
-analyzecall(ECall *call, intptr *type, int *ptrlvl, int nsym)
+analyzesignparams(AnalyzeCtx *ctx, ECall *call, Mem *expr, SSign *fun, intptr convtab, int nconv, int nsym)
+{
+	intptr *exprs = (intptr*) ftptr(&ftast, call->params);
+	SMember *params = (SMember*) ftptr(&ftast, fun->params);
+	for (int i = 0; i < call->nparam; i++) {
+		intptr realtype = -1;
+		getrealtype(params[i].type, convtab, nconv, realtype);
+		assert(realtype > 0);
+
+		intptr type = -1;
+		int ptrlvl = 0;
+		if (!analyzefunexpr(ctx, exprs[i], &type, &ptrlvl, realtype, nsym)) {
+			ERR("Error when parsing the expression in a fun call expression.");
+			return 0;
+		}
+
+		if (type != realtype || ptrlvl != params[i].ptrlvl) {
+			ERR("The expression type used as the param <%s> of the function <%s> in the module <%s> doesn't match.",
+			identstr(params[i].ident), identstr(fun->ident), identstr(expr->addr));
+			ERR("Found <%s ptrlvl(%d)> but expects <%s ptrlvl(%d)>.", identstr(type), ptrlvl, identstr(realtype), params[i].ptrlvl);
+
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
+static Bool
+analyzesignreturn(ECall *call, Mem *expr, SSign *fun, intptr convtab, int nconv, intptr *type, int *ptrlvl)
+{
+	intptr realtype = -1;
+	getrealtype(fun->type, convtab, nconv, realtype);
+	assert(realtype > 0);
+
+	call->type = realtype;
+	call->ptrlvl = fun->ptrlvl;
+	*type = realtype;
+	*ptrlvl = fun->ptrlvl;
+	if (fun->nparam != call->nparam) {
+		ERR("The number of param (%d) in the function call of <%s> doesn't match with the signature (%d).", call->nparam, identstr(expr->addr), fun->nparam);
+		return 0;
+	}
+
+	return 1;
+}
+
+static intptr
+convgen(SGenerics *from, SGenerics *to, intptr type)
+{
+	assert(from->ngen == to->ngen);
+
+	intptr *f = (intptr*) ftptr(&ftast, from->generics);
+	intptr *t = (intptr*) ftptr(&ftast, to->generics);
+	for (int i = 0; i < from->ngen; i++) {
+		if (f[i] == type) {
+			return t[i];
+		}
+	}
+
+	assert("Unreachable");
+	return -1;
+}
+static Bool
+analyzeskelreturn(ECall *call, Mem *expr, SSign *fun, SGenerics *skelgen, SGenerics *signgen, intptr *type, int *ptrlvl)
+{
+	intptr realtype = fun->type;
+	if (isgeneric(fun->type)) {
+		realtype = convgen(signgen, skelgen, fun->type);	
+	}
+
+	call->type = realtype;
+	call->ptrlvl = fun->ptrlvl;
+	*type = realtype;
+	*ptrlvl = fun->ptrlvl;
+
+	if (fun->nparam != call->nparam) {
+		ERR("The number of param (%d) in the function call of <%s> doesn't match with the signature (%d).", call->nparam, identstr(expr->addr), fun->nparam);
+		return 0;
+	}
+
+	return 1;
+}
+
+static Bool
+analyzeskelparams(AnalyzeCtx *ctx, ECall *call, Mem *expr, SSign *fun, SGenerics *skelgen, SGenerics *signgen, int nsym)
+{
+	intptr *exprs = (intptr*) ftptr(&ftast, call->params);
+	SMember *params = (SMember*) ftptr(&ftast, fun->params);
+	for (int i = 0; i < call->nparam; i++) {
+		intptr realtype = params[i].type;
+		if (isgeneric(realtype)) {
+			realtype = convgen(signgen, skelgen, realtype);	
+		}
+
+		intptr type = -1;
+		int ptrlvl = 0;
+		if (!analyzefunexpr(ctx, exprs[i], &type, &ptrlvl, realtype, nsym)) {
+			ERR("Error when parsing the expression in a fun call expression.");
+			return 0;
+		}
+
+		if (type != realtype || ptrlvl != params[i].ptrlvl) {
+			ERR("The expression type used as the param <%s> of the function <%s> in the module <%s> doesn't match.",
+			identstr(params[i].ident), identstr(fun->ident), identstr(expr->addr));
+			ERR("Found <%s ptrlvl(%d)> but expects <%s ptrlvl(%d)>.", identstr(type), ptrlvl, identstr(realtype), params[i].ptrlvl);
+
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
+static Bool
+analyzetopmodcall(AnalyzeCtx *ctx, EAccess *a, ECall *call, Mem *expr, intptr *type, int *ptrlvl, int nsym)
+{
+	intptr convtab = -1;
+	int nconv = 0;
+
+	SModSign *sign = searchmodsign(expr->addr, &convtab, &nconv);
+	if (sign == NULL) {
+		ERR("The signature of the module <%s> can't be found.", identstr(expr->addr));
+		return 0;
+	}
+
+	SSign *fun = searchsig(sign->stmts, sign->nstmt, a->ident);
+	if (fun == NULL) {
+		ERR("The function <%s> isn't declared in the signature <%s>.", identstr(a->ident), identstr(sign->ident));
+		return 0;
+	}
+
+	if(!analyzesignreturn(call, expr, fun, convtab, nconv, type, ptrlvl)) {
+		ERR("Error when analyzing the return type of a module function.");
+		return 0;
+	}
+
+	if (!analyzesignparams(ctx, call, expr, fun, convtab, nconv, nsym)) {
+		ERR("Error when analyzing the params of a module function.");
+		return 0;
+	}
+
+	return 1;
+}
+
+static Bool
+analyzeimplmodcall(AnalyzeCtx *ctx, EAccess *a, ECall *call, Mem *expr, intptr *type, int *ptrlvl, int nsym)
+{
+	assert(ctx->impl->kind == SMODIMPL);
+
+	// search among the module params of the impl.
+	intptr modules = ctx->impl->modules;
+	if (modules == -1) {
+		ERR("Calling a function from the module <%s> which is not declared in the impl <%s>.", identstr(expr->addr), identstr(ctx->impl->ident));
+		return 0;
+	}
+
+	SSignatures *s = (SSignatures*) ftptr(&ftast, modules);
+	SSignature *signs = (SSignature*) ftptr(&ftast, s->signs);
+	intptr isign = -1;
+	for (int i = 0; i < s->nsign; i++) {
+		if (signs[i].ident == expr->addr) {
+			isign = signs[i].signature;
+			break;
+		}
+	}
+
+	if (isign == -1) {
+		ERR("Calling a function from the signatures <%s> which is not declared in the impl <%s>.", identstr(expr->addr), identstr(ctx->impl->ident));
+		return 0;
+	}
+
+	intptr convtab = -1;
+	int nconv = 0;
+	SModSign *sign = searchmodsign(isign, &convtab, &nconv);
+	if (sign == NULL) {
+		ERR("Can't find the signature of the module <%s>.", identstr(isign));
+		return 0;
+	}
+
+	SSign *fun = searchsig(sign->stmts, sign->nstmt, a->ident);
+	if (fun == NULL) {
+		ERR("The function <%s> isn't declared in the signature <%s>.", identstr(a->ident), identstr(sign->ident));
+		return 0;
+	}
+
+	if(!analyzesignreturn(call, expr, fun, convtab, nconv, type, ptrlvl)) {
+		ERR("Error when analyzing the return type of a module function.");
+		return 0;
+	}
+
+	if (!analyzesignparams(ctx, call, expr, fun, convtab, nconv, nsym)) {
+		ERR("Error when analyzing the params of a module function.");
+		return 0;
+	}
+
+	return 1;
+}
+
+static Bool
+analyzeskelmodcall(AnalyzeCtx *ctx, EAccess *a, ECall *call, Mem *expr, intptr *type, int *ptrlvl, int nsym)
+{
+	(void) a;
+	(void) call;
+	(void) type;
+	(void) ptrlvl;
+	(void) nsym;
+
+	// does the skel has signatures
+	intptr signatures = ctx->sign->signatures;
+	if (signatures == -1) {
+		ERR("Calling a function from the signatures <%s> which is not declared in the signatures <%s>.", identstr(expr->addr), identstr(ctx->sign->ident));
+		return 0;
+	}
+
+	// search in signatures
+	SSignatures *s = (SSignatures*) ftptr(&ftast, signatures);
+	SSignature *signs = (SSignature*) ftptr(&ftast, s->signs);
+	SSignature *sign = NULL;
+	for (int i = 0; i < s->nsign; i++) {
+		if (signs[i].ident == expr->addr) {
+			sign = signs + i;
+			break;
+		}
+	}
+	SGenerics *skelgen = (SGenerics*) ftptr(&ftast, sign->generics);
+
+	if (!sign) {
+		ERR("Calling a function from the signatures <%s> which is not declared in the signatures <%s>.", identstr(expr->addr), identstr(ctx->sign->ident));
+		return 0;
+	}
+
+
+	// search in toplevel signature
+	Symbol *sym = searchtopdcl(modsym + MODSIGN, sign->signature);
+	if (sym == NULL) {
+		ERR("The signature <%s> is never declared.", identstr(sign->signature));
+		return 0;
+	}
+
+	SModSign *signmod = (SModSign*) ftptr(&ftast, sym->stmt);
+	assert(signmod->kind == SMODSIGN);
+	SGenerics *signgen = (SGenerics*) ftptr(&ftast, signmod->generics);
+
+	SSign *fun = searchsig(signmod->stmts, signmod->nstmt, a->ident);
+	if (fun == NULL) {
+		ERR("The function <%s> isn't declared in the signature <%s>.", identstr(a->ident), identstr(sign->signature));
+		return 0;
+	}
+
+	if(!analyzeskelreturn(call, expr, fun, skelgen, signgen, type, ptrlvl)) {
+		ERR("Error when analyzing the return type of a module function.");
+		return 0;
+	}
+
+	if (!analyzeskelparams(ctx, call, expr, fun, skelgen, signgen, nsym)) {
+		ERR("Error when analyzing the params of a module function.");
+		return 0;
+	}
+
+	return 1;
+}
+
+static Bool
+analyzemodcall(AnalyzeCtx *ctx, EAccess *a, ECall *call, intptr *type, int *ptrlvl, int nsym)
+{
+	Mem *expr = (Mem*) ftptr(&ftast, a->expr);
+	if (expr->kind != EMEM) {
+		ERR("Unexpected expression <%s>, module call can't be chained.", exprstrs[expr->kind]);
+		return 0;
+	}
+
+	// is an impl or a skel
+	if (ctx != NULL) {
+		// is a skel
+		if (ctx->impl == NULL) {
+			return analyzeskelmodcall(ctx, a, call, expr, type, ptrlvl, nsym);
+		}
+		else {
+			return analyzeimplmodcall(ctx, a, call, expr, type, ptrlvl, nsym);
+		}
+	}
+
+	return analyzetopmodcall(ctx, a, call, expr, type, ptrlvl, nsym);
+}
+
+static Bool
+analyzecall(AnalyzeCtx *ctx, ECall *call, intptr *type, int *ptrlvl, int nsym)
 {
 	Mem* expr = (Mem*) ftptr(&ftast, call->expr);
 
+	if (expr->kind == EACCESS) {
+		EAccess *a = (EAccess*) expr;
+		return analyzemodcall(ctx, a, call, type, ptrlvl, nsym);
+	}
+
 	if (expr->kind != EMEM) {
-		TODO("Function pointer isn't available yet.");
+		ERR("Unexpected expression <%s> in a call expression.", exprstrs[expr->kind]);
 		return 0;
 	}
 
@@ -832,7 +1288,7 @@ analyzecall(ECall *call, intptr *type, int *ptrlvl, int nsym)
 	for (int i = 0; i < call->nparam; i++) {
 		intptr type;
 		int ptrlvl;
-		if (!analyzefunexpr(exprs[i], &type, &ptrlvl, params[i].type, nsym)) {
+		if (!analyzefunexpr(ctx, exprs[i], &type, &ptrlvl, params[i].type, nsym)) {
 			ERR("Error when parsing the expression in a fun call expression.");
 			return 0;
 		}
@@ -847,7 +1303,7 @@ analyzecall(ECall *call, intptr *type, int *ptrlvl, int nsym)
 }
 
 static Bool
-analyzeaccess(EAccess *ac, intptr *type, int *ptrlvl, int nsym)
+analyzeaccess(AnalyzeCtx *ctx, EAccess *ac, intptr *type, int *ptrlvl, int nsym)
 {
 	INFO("analyzeaccess");
 	Bool res = 0;
@@ -855,7 +1311,7 @@ analyzeaccess(EAccess *ac, intptr *type, int *ptrlvl, int nsym)
 	intptr structtype = -1;
 	int structptrlvl = 0;
 
-	res = analyzefunexpr(ac->expr, &structtype, &structptrlvl, -1, nsym);
+	res = analyzefunexpr(ctx, ac->expr, &structtype, &structptrlvl, -1, nsym);
 	if (res == 0) {
 		ERR("Error when analyzefunexpr.");
 		return 0;
@@ -871,7 +1327,7 @@ analyzeaccess(EAccess *ac, intptr *type, int *ptrlvl, int nsym)
 		return 0;
 	}
 
-	Symbol *s = searchtopdcl(&typesym, structtype);
+	Symbol *s = searchstruct(ctx, structtype);
 	assert(s != NULL);
 
 	SStruct* st = (SStruct*) ftptr(&ftast, s->stmt);
@@ -883,7 +1339,13 @@ analyzeaccess(EAccess *ac, intptr *type, int *ptrlvl, int nsym)
 		return 0;
 	}
 
-	ac->type = sm->type;
+	intptr realtype = sm->type;
+	if (ctx != NULL && ctx->impl != NULL) {
+		getrealtype(sm->type, ctx->impl->convtab, ctx->impl->nconv, realtype);
+		assert(realtype > 0);
+	}
+
+	ac->type = realtype;
 	ac->ptrlvl = sm->ptrlvl;
 	*type = ac->type;
 	*ptrlvl = ac->ptrlvl;
@@ -892,7 +1354,7 @@ analyzeaccess(EAccess *ac, intptr *type, int *ptrlvl, int nsym)
 }
 
 static Bool
-analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
+analyzefunexpr(AnalyzeCtx *ctx, intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
 {
 	int res = 0;
 	UnknownExpr *unknown = (UnknownExpr*) ftptr(&ftast, expr);
@@ -934,14 +1396,14 @@ analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 		return 1;
 	case EBINOP: {
 		EBinop *binop = (EBinop*) unknown;
-		res = analyzebinop(binop, type, ptrlvl, typeinfo, nsym);
+		res = analyzebinop(ctx, binop, type, ptrlvl, typeinfo, nsym);
 		binop->ptrlvl = *ptrlvl;
 		binop->type = *type;
 		return res;
 	}
 	case EUNOP: {
 		EUnop *unop = (EUnop*) unknown;
-		res = analyzeunop(unop, type, ptrlvl, typeinfo, nsym);
+		res = analyzeunop(ctx, unop, type, ptrlvl, typeinfo, nsym);
 		unop->ptrlvl = *ptrlvl;
 		unop->type = *type;
 		return res;
@@ -949,11 +1411,11 @@ analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 	case ESTRUCT: {
 		EStruct* st = (EStruct*) unknown;
 		*ptrlvl = 0;
-		return analyzestruct(st, type, nsym);
+		return analyzestruct(ctx, st, type, nsym);
 	}
 	case ECALL: {
 		ECall *call = (ECall*) unknown;
-		return analyzecall(call, type, ptrlvl, nsym);
+		return analyzecall(ctx, call, type, ptrlvl, nsym);
 	}
 	case EMEM: {
 		Mem *mem = (Mem*) unknown;
@@ -972,7 +1434,7 @@ analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 	}
 	case EACCESS: {
 		EAccess *ac = (EAccess*) unknown;
-		return analyzeaccess(ac, type, ptrlvl, nsym);
+		return analyzeaccess(ctx, ac, type, ptrlvl, nsym);
 	}
 
 	default:
@@ -984,7 +1446,7 @@ analyzefunexpr(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym
 }
 
 static Bool
-analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
+analyzefunstmt(AnalyzeCtx *ctx, const SFun *fun, int *nsym, int block, intptr stmt)
 {
 	UnknownStmt *unknown = (UnknownStmt*) ftptr(&ftast, stmt);
 	switch (*unknown) {
@@ -993,12 +1455,12 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 
 		SSeq* seq = (SSeq*) unknown;
 
-		if (!analyzefunstmt(fun, nsym, block, seq->stmt)) {
+		if (!analyzefunstmt(ctx, fun, nsym, block, seq->stmt)) {
 			ERR("Error when analyzing a seq in a function.");
 			return 0;
 		}
 
-		if (!analyzefunstmt(fun, nsym, block, seq->nxt)) {
+		if (!analyzefunstmt(ctx, fun, nsym, block, seq->nxt)) {
 			ERR("Error when analyzing a seq in a function.");
 			return 0;
 		}
@@ -1012,7 +1474,7 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 		int ptrlvl;
 
 		SDecl *decl = (SDecl*)unknown;
-		if (!analyzefunexpr(decl->expr, &type, &ptrlvl, decl->type, *nsym)) {
+		if (!analyzefunexpr(ctx, decl->expr, &type, &ptrlvl, decl->type, *nsym)) {
 			ERR("Error when analyzing a declaration in a function.");
 			return 0;
 		}
@@ -1039,7 +1501,7 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 		int ptrlvl;
 
 		SIf* _if = (SIf*)unknown;
-		if (!analyzefunexpr(_if->cond, &type, &ptrlvl, -1, *nsym)) {
+		if (!analyzefunexpr(ctx, _if->cond, &type, &ptrlvl, -1, *nsym)) {
 			ERR("Error when analyzing the condition of a if.");
 			return 0;
 		}
@@ -1050,13 +1512,13 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 		}
 
 		int newnsym = *nsym;
-		if (!analyzefunstmt(fun, &newnsym, newnsym, _if->ifstmt)) {
+		if (!analyzefunstmt(ctx, fun, &newnsym, newnsym, _if->ifstmt)) {
 			ERR("Error when analyzing the if stmt of a if.");
 			return 0;
 		}
 
 		newnsym = *nsym;
-		if (_if->elsestmt != -1 && !analyzefunstmt(fun, &newnsym, newnsym, _if->elsestmt)) {
+		if (_if->elsestmt != -1 && !analyzefunstmt(ctx, fun, &newnsym, newnsym, _if->elsestmt)) {
 			ERR("Error when analyzing the else stmt of a if.");
 			return 0;
 		}
@@ -1068,7 +1530,7 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 		intptr type = -1;
 		int ptrlvl = -1;
 
-		if (!analyzefunexpr(ret->expr, &type, &ptrlvl, fun->type, *nsym)) {
+		if (!analyzefunexpr(ctx, ret->expr, &type, &ptrlvl, fun->type, *nsym)) {
 			ERR("Error when analyzing the return statement.");
 			return 0;
 		}
@@ -1092,17 +1554,17 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 		int newnsym = *nsym;
 		int newblock = newnsym;
 
-		if (!analyzefunstmt(fun, &newnsym, newblock, f->stmt1)) {
+		if (!analyzefunstmt(ctx, fun, &newnsym, newblock, f->stmt1)) {
 			ERR("Error when analyzing the first stmt of a for.");
 			return 0;
 		}
 
-		if (!analyzefunstmt(fun, &newnsym, newblock, f->stmt2)) {
+		if (!analyzefunstmt(ctx, fun, &newnsym, newblock, f->stmt2)) {
 			ERR("Error when analyzing the second stmt of a for.");
 			return 0;
 		}
 
-		if (!analyzefunexpr(f->expr, &type, &ptrlvl, -1, newnsym)) {
+		if (!analyzefunexpr(ctx, f->expr, &type, &ptrlvl, -1, newnsym)) {
 			ERR("Error when analyzing the condition of a if.");
 			return 0;
 		}
@@ -1113,7 +1575,7 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 		}
 
 		newblock = newnsym;
-		if (!analyzefunstmt(fun, &newnsym, newblock, f->forstmt)) {
+		if (!analyzefunstmt(ctx, fun, &newnsym, newblock, f->forstmt)) {
 			ERR("Error when analyzing the body stmt of a for.");
 			return 0;
 		}
@@ -1142,7 +1604,7 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 		for (int i = 0; i < call->nparam; i++) {
 			intptr type;
 			int ptrlvl;
-			if (!analyzefunexpr(exprs[i], &type, &ptrlvl, params[i].type, *nsym)) {
+			if (!analyzefunexpr(ctx, exprs[i], &type, &ptrlvl, params[i].type, *nsym)) {
 				ERR("Error when parsing the expression in a fun call expression.");
 				return 0;
 			}
@@ -1153,6 +1615,11 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 			}
 		}
 		return 1;
+	}
+	case SACCESSMOD: {
+		INFO("SACCESSMOD");
+		TODO("Module fun call.");
+		return 0;
 	}
 	case SASSIGN: {
 		INFO("SASSIGN");
@@ -1171,7 +1638,7 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 
 		intptr type = -1;
 		int ptrlvl = -1;
-		if (!analyzefunexpr(a->expr, &type, &ptrlvl, sym->type, *nsym)) {
+		if (!analyzefunexpr(ctx, a->expr, &type, &ptrlvl, sym->type, *nsym)) {
 			ERR("Error when parsing the expression in an assign.");
 			return 0;
 		}
@@ -1195,14 +1662,14 @@ analyzefunstmt(const SFun *fun, int *nsym, int block, intptr stmt)
 
 		intptr ltype = -1;
 		int lptrlvl = -1;
-		if (!analyzefunexpr(a->left, &ltype, &lptrlvl, -1, *nsym)) {
+		if (!analyzefunexpr(ctx, a->left, &ltype, &lptrlvl, -1, *nsym)) {
 			ERR("Error when parsing the expression in an assign.");
 			return 0;
 		}
 
 		intptr rtype = -1;
 		int rptrlvl = -1;
-		if (!analyzefunexpr(a->right, &rtype, &rptrlvl, ltype, *nsym)) {
+		if (!analyzefunexpr(ctx, a->right, &rtype, &rptrlvl, ltype, *nsym)) {
 			ERR("Error when parsing the expression in an assign.");
 			return 0;
 		}
@@ -1240,7 +1707,7 @@ inserttopdcl(Symbols *syms, intptr ident, intptr stmt)
 }
 
 Bool
-analyzefun(SFun *fun, intptr stmt, int nsym)
+analyzefun(AnalyzeCtx *ctx, SFun *fun, intptr stmt, int nsym)
 {
 	// Verify the params
 	SMember *member = (SMember*) ftptr(&ftast, fun->params);
@@ -1273,7 +1740,7 @@ analyzefun(SFun *fun, intptr stmt, int nsym)
 	}
 
 	int newnsym = nsym;
-	if (!analyzefunstmt(fun, &newnsym, newnsym, fun->stmt)) {
+	if (!analyzefunstmt(ctx, fun, &newnsym, newnsym, fun->stmt)) {
 		ERR("Error when analyzing the fun statements");
 		return 0;
 	}
@@ -1374,15 +1841,24 @@ sign_is_generic_defined(SGenerics *g1, SSignature *s)
 static Bool
 sign_are_generics_defined(intptr generics, intptr signatures)
 {
-	// No signatures
-	if (signatures == -1) {
-		return 1;
-	}
-
 	// No generics
 	SGenerics *g = NULL;
 	if (generics != -1) {
 		g = (SGenerics*) ftptr(&ftast, generics);
+
+		// Verify generic names
+		intptr *genident = (intptr*) ftptr(&ftast, g->generics);
+		for (int i = 0; i < g->ngen; i++) {
+			if (!isgeneric(genident[i])) {
+				ERR("Invalid generic identifier <%s>, it must be a one upper letter.", identstr(genident[i]));
+				return 0;
+			}
+		}
+	}
+
+	// No signatures
+	if (signatures == -1) {
+		return 1;
 	}
 
 	// Generics and signatures
@@ -1401,8 +1877,6 @@ sign_are_generics_defined(intptr generics, intptr signatures)
 static Bool
 sign_is_type_exist(SModSign *s, SGenerics *g, intptr ident, int ptrlvl, Bool verifyptrlvl)
 {
-	(void) s;
-
 	if (istypedefined(ident)) {
 		return 1;
 	}
@@ -1414,7 +1888,13 @@ sign_is_type_exist(SModSign *s, SGenerics *g, intptr ident, int ptrlvl, Bool ver
 		return ptrlvl > 0;
 	}
 
-	TODO("Verify if the struct is defined in the module.");
+	if (searchtopdcl(&genstructsym, ident)) {
+		if (searchgenstruct(s, ident)) {
+			return 1;
+		}
+	}
+
+	ERR("Verify if the struct is defined in the module.");
 	return 0;
 }
 
@@ -1436,6 +1916,7 @@ sign_analyze_stmt(SModSign *sign, SGenerics *g, intptr stmt)
 				}
 			}
 		}
+		inserttopdcl(&genstructsym, s->ident, stmt);
 		break;
 	}
 	case SSIGN: {
@@ -1495,20 +1976,6 @@ analyzemodsign(SModSign *sign)
 	return 1;
 }
 
-static intptr
-searchreal(intptr convtab, int nconv, intptr generic)
-{
-	SConv *c = (SConv*) ftptr(&ftast, convtab);
-
-	for (int i = 0; i < nconv; i++) {
-		if (c[i].gen == generic) {
-			return c[i].real;
-		}
-	}
-
-	return -1;
-}
-
 static Bool
 getmodinfo(intptr module, intptr *generics, intptr *signature)
 {
@@ -1546,13 +2013,13 @@ getmodinfo(intptr module, intptr *generics, intptr *signature)
 }
 
 static Bool
-impl_verify_generics(SModImpl *impl, SModSign *sign)
+impl_verify_generics(intptr ident, intptr generics, intptr *convtab, int *nconv, SModSign *sign)
 {
 	SGenerics *g1 = NULL;
 	SGenerics *g2 = NULL;
 
-	if (impl->generics != -1) {
-		g1 = (SGenerics*) ftptr(&ftast, impl->generics);
+	if (generics != -1) {
+		g1 = (SGenerics*) ftptr(&ftast, generics);
 	}
 
 	if (sign->generics != -1) {
@@ -1560,13 +2027,13 @@ impl_verify_generics(SModImpl *impl, SModSign *sign)
 	}
 
 	if ((g1 == NULL || g2 == NULL) && g1 != g2) {
-		ERR("Incompatible generics of <%s> with its signature <%s>.", identstr(impl->ident), identstr(impl->signature));
+		ERR("Incompatible generics of <%s> with its signature <%s>.", identstr(ident), identstr(sign->ident));
 		return 0;
 	}
 
 	if (g1 != NULL) {
 		if (g1->ngen != g2->ngen) {
-			ERR("Incompatible generics of <%s> with its signature <%s>.", identstr(impl->ident), identstr(impl->signature));
+			ERR("Incompatible generics of <%s> with its signature <%s>.", identstr(ident), identstr(sign->ident));
 			return 0;
 		}
 
@@ -1575,17 +2042,17 @@ impl_verify_generics(SModImpl *impl, SModSign *sign)
 		intptr *t2 = (intptr*) ftptr(&ftast, g2->generics);
 
 		{
-			int i = 0;
-			impl->convtab = ftalloc(&ftast, sizeof(SConv));
-			impl->nconv = g1->ngen;
-			SConv *c = (SConv*) ftptr(&ftast, impl->convtab);
+			*convtab = ftalloc(&ftast, sizeof(SConv));
+			*nconv = g1->ngen;
+			SConv *c = (SConv*) ftptr(&ftast, *convtab);
 
-			for (; i < g1->ngen; i++) {
+			for (int i = 0; i < g1->ngen; i++) {
 				if (!istypedefined(t1[i])) {
-					ERR("In <%s> the type <%s> is used but never defined.", identstr(impl->ident), identstr(t1[i]));
+					ERR("In <%s> the type <%s> is used but never defined.", identstr(ident), identstr(t1[i]));
 					return 0;
 				}
 
+				// Build conv table.
 				c[i].real = t1[i];
 				c[i].gen = t2[i];
 				(void) ftalloc(&ftast, sizeof(SConv));
@@ -1596,13 +2063,13 @@ impl_verify_generics(SModImpl *impl, SModSign *sign)
 }
 
 static Bool
-impl_verify_module(SModImpl *impl, SModSign *sign)
+impl_verify_module(intptr ident, intptr modules, intptr convtab, int nconv, SModSign *sign)
 {
 	SSignatures *s1 = NULL;
 	SSignatures *s2 = NULL;
 
-	if (impl->modules != -1) {
-		s1 = (SSignatures*) ftptr(&ftast, impl->modules);
+	if (modules != -1) {
+		s1 = (SSignatures*) ftptr(&ftast, modules);
 	}
 
 	if (sign->signatures != -1) {
@@ -1610,14 +2077,13 @@ impl_verify_module(SModImpl *impl, SModSign *sign)
 	}
 
 	if ((s1 == NULL || s2 == NULL) && s1 != s2) {
-		ERR("Incompatible modules of <%s> with its signature <%s>.", identstr(impl->ident), identstr(impl->signature));
+		ERR("Incompatible modules of <%s> with its signature <%s>.", identstr(ident), identstr(sign->ident));
 		return 0;
 	}
 
 	if (s1 != NULL) {
-		TODO("Accept the module params in an implementation.");
 		if (s1->nsign != s2->nsign) {
-			ERR("Incompatible modules of <%s> with its signature <%s>.", identstr(impl->ident), identstr(impl->signature));
+			ERR("Incompatible modules of <%s> with its signature <%s>.", identstr(ident), identstr(sign->ident));
 			return 0;
 		}
 
@@ -1626,7 +2092,7 @@ impl_verify_module(SModImpl *impl, SModSign *sign)
 		for (int i = 0; i < s1->nsign; i++) {
 			if (ss1->ident != ss2->ident) {
 				ERR("The %d module params are incompatible <%s> != <%s>", i, identstr(ss1->ident), identstr(ss2->ident));
-				ERR("Incompatible module params of <%s> with its signature <%s>.", identstr(impl->ident), identstr(impl->signature));
+				ERR("Incompatible module params of <%s> with its signature <%s>.", identstr(ident), identstr(sign->ident));
 				return 0;
 			}
 
@@ -1634,16 +2100,16 @@ impl_verify_module(SModImpl *impl, SModSign *sign)
 			intptr msign = -1;
 			// search module...
 			if (!getmodinfo(ss1[i].signature, &mgen, &msign)) {
-				ERR("Implementing <%s> with the undefined module <%s>.", identstr(impl->ident), identstr(ss1[i].signature));
+				ERR("Implementing <%s> with the undefined module <%s>.", identstr(ident), identstr(ss1[i].signature));
 				return 0;
 			}
 
 			// verify module signature
 			if (ss2[i].signature != msign) {
-				ERR("In <%s> using <%s: %s> as the signature type of <%s> but <%s> is required.", identstr(impl->ident), identstr(ss1[i].ident), identstr(ss1[i].signature), identstr(msign), identstr(ss2[i].signature));
+				ERR("In <%s> using <%s: %s> as the signature type of <%s> but <%s> is required.", identstr(ident), identstr(ss1[i].ident), identstr(ss1[i].signature), identstr(msign), identstr(ss2[i].signature));
 				return 0;
 			}
-			
+
 			// verify module generics
 			SGenerics *ss2gen = NULL;
 			if (ss2[i].generics != -1) {
@@ -1656,21 +2122,21 @@ impl_verify_module(SModImpl *impl, SModSign *sign)
 			}
 
 			if ((ss2gen == NULL || mgengen == NULL) && ss2gen != mgengen) {
-				ERR("In <%s> using <%s: %s> as the signature type of <%s> but generics can't match signatures", identstr(impl->ident), identstr(ss1[i].ident), identstr(ss1[i].signature), identstr(msign));
+				ERR("In <%s> using <%s: %s> as the signature type of <%s> but generics can't match signatures", identstr(ident), identstr(ss1[i].ident), identstr(ss1[i].signature), identstr(msign));
 				return 0;
 			}
 
 			if (ss2gen != NULL) {
 				if (ss2gen->ngen != mgengen->ngen) {
-					ERR("In <%s> using <%s: %s> as the signature type of <%s> but generics can't match signatures", identstr(impl->ident), identstr(ss1[i].ident), identstr(ss1[i].signature), identstr(msign));
+					ERR("In <%s> using <%s: %s> as the signature type of <%s> but generics can't match signatures", identstr(ident), identstr(ss1[i].ident), identstr(ss1[i].signature), identstr(msign));
 					return 0;
 				}
 
 				intptr *t1 = (intptr*) ftptr(&ftast, mgengen->generics);
 				intptr *t2 = (intptr*) ftptr(&ftast, ss2gen->generics);
 				for (int j = 0; j < ss2gen->ngen; j++) {
-					if (!(searchreal(impl->convtab, impl->nconv, t2[j]) == t1[j])) {
-						ERR("In <%s> using <%s: %s> as the signature type of <%s> but generics can't match signatures", identstr(impl->ident), identstr(ss1[i].ident), identstr(ss1[i].signature), identstr(msign));
+					if (!(searchreal(convtab, nconv, t2[j]) == t1[j])) {
+						ERR("In <%s> using <%s: %s> as the signature type of <%s> but generics can't match signatures", identstr(ident), identstr(ss1[i].ident), identstr(ss1[i].signature), identstr(msign));
 						return 0;
 					}
 				}
@@ -1681,18 +2147,20 @@ impl_verify_module(SModImpl *impl, SModSign *sign)
 }
 
 static Bool
-impl_analyzefun(intptr convtab, int nconv, SFun *impl, SSign *sign)
+impl_verify_funsig(intptr convtab, int nconv, SFun *impl, SSign *sign, int *localnsym)
 {
 	if (impl->ident != sign->ident) {
 		ERR("Expects the functions in the same order in the impl and in the signature.");
 		return 0;
 	}
-	int signtype = istypedefined(sign->type) ? sign->type : searchreal(convtab, nconv, sign->type);
+
+	int signtype = -1;
+	getrealtype(sign->type, convtab, nconv, signtype);
 	assert(signtype > 0 && "Unreachable assert.");
 
 	if (signtype != impl->type || impl->ptrlvl != sign->ptrlvl) {
 		ERR("Incompatible return type in <%s>, signature <%s ptrlvl(%d)> impl <%s ptrlvl(%d)>.",
-		 identstr(impl->ident), identstr(sign->type), sign->ptrlvl, identstr(impl->type), impl->ptrlvl);
+		    identstr(impl->ident), identstr(sign->type), sign->ptrlvl, identstr(impl->type), impl->ptrlvl);
 		return 0;
 	}
 
@@ -1703,32 +2171,27 @@ impl_analyzefun(intptr convtab, int nconv, SFun *impl, SSign *sign)
 
 	SMember *m1 = (SMember*) ftptr(&ftast, impl->params);
 	SMember *m2 = (SMember*) ftptr(&ftast, sign->params);
-	int localnsym = nsym;
+	*localnsym = nsym;
 	for (int i = 0; i < impl->nparam; i++) {
 		if (m1[i].ident != m2[i].ident) {
 			ERR("Incompatible param identifier in <%s>, <%s> != <%s>.", identstr(impl->ident), identstr(m1[i].ident), identstr(m2[i].ident));
 			return 0;
 		}
 
-		int signtype = istypedefined(m2[i].type) ? m2[i].type : searchreal(convtab, nconv, m2[i].type);
+		int signtype = -1;
+		getrealtype((m2[i].type), convtab, nconv, signtype);
 		assert(signtype > 0 && "Unreachable assert.");
 		if (signtype != m1[i].type || m1[i].ptrlvl != m2[i].ptrlvl) {
 			ERR("Incompatible param type in <%s> of <%s>, signature <%s ptrlvl(%d)> impl <%s ptrlvl(%d)>.",
-			 identstr(impl->ident), identstr(m1[i].ident), identstr(m2[i].type), m2[i].ptrlvl, identstr(m1[i].type), m1[i].ptrlvl);
+			    identstr(impl->ident), identstr(m1[i].ident), identstr(m2[i].type), m2[i].ptrlvl, identstr(m1[i].type), m1[i].ptrlvl);
 			return 0;
 		}
-		syminfo[localnsym].type = m1[i].type;
-		syminfo[localnsym].ptrlvl = m1[i].ptrlvl;
-		syminfo[localnsym].ident = m1[i].ident;
-		localnsym++;
+		syminfo[*localnsym].type = m1[i].type;
+		syminfo[*localnsym].ptrlvl = m1[i].ptrlvl;
+		syminfo[*localnsym].ident = m1[i].ident;
+		*localnsym += 1;
 	}
 
-	if (!analyzefunstmt(impl, &localnsym, localnsym, impl->stmt)) {
-		ERR("Error when analyzing fun stmt in an implementation.");
-		return 0;
-	}
-
-	// Analyze function stmt
 	return 1;
 }
 
@@ -1762,9 +2225,22 @@ impl_verify_stmts(SModImpl *impl, SModSign *sign)
 			return 0;
 		}
 
-		// Verify function
-		if (!impl_analyzefun(impl->convtab, impl->nconv, f1, f2)) {
+		int localnsym = 0;
+		// Verify function signature
+		if (!impl_verify_funsig(impl->convtab, impl->nconv, f1, f2, &localnsym)) {
 			ERR("Incompatible functions.");
+			return 0;
+		}
+		i2++;
+
+		AnalyzeCtx ctx = (AnalyzeCtx) {
+			.sign = sign,
+			.impl = impl,
+		};
+
+		// Analyze function stmt
+		if (!analyzefunstmt(&ctx, f1, &localnsym, localnsym, f1->stmt)) {
+			ERR("Error when analyzing fun stmt in an implementation.");
 			return 0;
 		}
 	}
@@ -1785,28 +2261,65 @@ analyzemodimpl(SModImpl *impl)
 	assert(sign->kind == SMODSIGN && "MODSIGN Table must contain only mod signatures");
 
 	// Verify the generics.
-	if (!impl_verify_generics(impl, sign)) {
+	if (!impl_verify_generics(impl->ident, impl->generics, &impl->convtab, &impl->nconv, sign)) {
 		ERR("Error when analyzing <%s>.", identstr(impl->ident));
 		return 0;
 	}
 
 	// Verify the modules.
-	if(!impl_verify_module(impl, sign)) {
+	if (!impl_verify_module(impl->ident, impl->modules, impl->convtab, impl->nconv, sign)) {
 		ERR("Error when analyzing <%s>.", identstr(impl->ident));
 		return 0;
 	}
 
 	// Verify the stmts.
-	if(!impl_verify_stmts(impl, sign)) {
+	if (!impl_verify_stmts(impl, sign)) {
 		ERR("Error when analyzing <%s>.", identstr(impl->ident));
 		return 0;
 	}
-	
+
+	return 1;
+}
+
+static Bool
+skel_verify_sign(SFun *f, SSign *s, int *localnsym)
+{
+	if (f->ident != s->ident) {
+		ERR("Unmatching function name <%s> with its signature <%s>.", identstr(f->ident), identstr(s->ident));
+		return 0;
+	}
+
+	if (f->type != s->type || f->ptrlvl != s->ptrlvl) {
+		ERR("Unmatching return type of the function <%s> with its signature, <%s ptrlvl(%d)> != <%s ptrlvl(%d)>.",
+		    identstr(f->ident), identstr(f->type), f->ptrlvl, identstr(s->ptrlvl), s->ptrlvl);
+		return 0;
+	}
+
+	if (f->nparam != s->nparam) {
+		ERR("Unmatching param number of the function <%s> with its signatured)>.",
+		    identstr(f->ident));
+		return 0;
+	}
+
+	SMember *m1 = (SMember*) ftptr(&ftast, f->params);
+	SMember *m2 = (SMember*) ftptr(&ftast, s->params);
+	for (int i = 0; i < f->nparam; i++) {
+		if (m1->ident != m2->ident || m1->type != m2->type || m1->ptrlvl != m2->ptrlvl) {
+			ERR("Unmatching param of the function <%s> with its signatured)>, %s : <%s ptrlvl(%d) != %s : <%s ptrlvl(%d)",
+			    identstr(f->ident), identstr(m1->ident), identstr(m1->type), m1->ptrlvl, identstr(m2->ident), identstr(m2->type), m2->type);
+			return 0;
+		}
+		syminfo[*localnsym].type = m1[i].type;
+		syminfo[*localnsym].ptrlvl = m1[i].ptrlvl;
+		syminfo[*localnsym].ident = m1[i].ident;
+		*localnsym += 1;
+	}
+
 	return 1;
 }
 
 Bool
-analyzemodskeleton(SModSkel *skel)
+analyzemodskel(SModSkel *skel)
 {
 	// Verify the existance of the signature.
 	Symbol *s = searchtopdcl(modsym + MODSIGN, skel->signature);
@@ -1818,16 +2331,83 @@ analyzemodskeleton(SModSkel *skel)
 	SModSign *sign = (SModSign*) ftptr(&ftast, s->stmt);
 	assert(sign->kind == SMODSIGN);
 
-	// verify stmts
+	if (skel->nstmt > sign->nstmt) {
+		ERR("There is more stmt in the skeleton than in the signature.");
+		return 0;
+	}
 
-	TODO("analyzemodskeleton");
-	return 0;
+	intptr *stmt1 = (intptr*) ftptr(&ftast, skel->stmts);
+	intptr *stmt2 = (intptr*) ftptr(&ftast, sign->stmts);
+
+	AnalyzeCtx ctx = (AnalyzeCtx) {
+		.sign = sign,
+		.impl = NULL,
+	};
+
+	int i2 = 0;
+	for (int i1 = 0; i1 < skel->nstmt; i1++) {
+
+		SSign *f2 = (SSign*) ftptr(&ftast, stmt2[i2]);
+		while (f2->kind != SSIGN) {
+			i2++;
+			f2 = (SFun*) ftptr(&ftast, stmt2[i2]);
+			if (i2 >= sign->nstmt) {
+				ERR("Statements of the impl are incompatible with the statements of the signature.");
+				return 0;
+			}
+		}
+
+		SFun *f1 = (SFun*) ftptr(&ftast, stmt1[i1]);
+		if (f1->kind != SFUN) {
+			ERR("Unexpected statement <%s> in a skeleton.", stmtstrs[f1->kind]);
+			return 0;
+		}
+
+		int localnsym = nsym;
+		// Verify function signature
+		if (!skel_verify_sign(f1, f2, &localnsym)) {
+			ERR("Incompatible functions.");
+			return 0;
+		}
+
+		if (!analyzefunstmt(&ctx, f1, &localnsym, localnsym, f1->stmt)) {
+			ERR("Error when analyzing the function <%s> of the skel <%s>.", identstr(f1->ident), identstr(skel->ident));
+			return 0;
+		}
+
+		i2++;
+	}
+
+	return 1;
 }
 
 Bool
-analyzemodefine(SModDef *def)
+analyzemoddef(SModDef *def)
 {
-	(void) def;
-	TODO("analyzemodefine");
-	return 0;
+	// Verify the existance of the skeleton.
+	Symbol *s = searchtopdcl(modsym + MODSKEL, def->skeleton);
+	if (s == NULL) {
+		ERR("The skeleton <%s> use an undefined signature <%s>.", identstr(def->ident), identstr(def->skeleton));
+		return 0;
+	}
+
+	SModSkel *skel = (SModSkel*) ftptr(&ftast, s->stmt);
+	assert(skel->kind == SMODSKEL);
+
+	// Get the skel signature.
+	s = searchtopdcl(modsym + MODSIGN, skel->signature);
+	assert(s != NULL);
+	SModSign *sign = (SModSign*) ftptr(&ftast, s->stmt);
+	assert(sign->kind == SMODSIGN);
+
+	if (!impl_verify_generics(def->ident, def->generics, &def->convtab, &def->nconv, sign)) {
+		ERR("Error in the definition of the module <%s>.", identstr(def->ident));
+		return 0;
+	}
+	if (!impl_verify_module(def->ident, def->modules, def->convtab, def->nconv, sign)) {
+		ERR("Error in the definition of the module <%s>.", identstr(def->ident));
+		return 0;
+	}
+
+	return 1;
 }

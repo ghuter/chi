@@ -32,6 +32,7 @@ typedef enum {
 	SRETURN,
 	SFOR,
 	SCALL,
+	SACCESSMOD,
 	SIMPORT,
 	SBLOCK,
 	SEXPRASSIGN,
@@ -121,6 +122,12 @@ typedef struct {
 	int nparam;
 	intptr params; // [Expr*]
 } SCall;
+
+typedef struct {
+	EStmt kind;
+	intptr mod;
+	intptr stmt; // UnknownStmt*
+} SAccessMod;
 
 typedef struct {
 	EStmt kind;

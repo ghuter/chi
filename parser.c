@@ -105,6 +105,7 @@ const char *stmtstrs[NSTATEMENT] = {
 	[SASSIGN]     = "SASSIGN",
 	[SFOR]        = "SFOR",
 	[SCALL]       = "SCALL",
+	[SACCESSMOD]  = "SACCESSMOD",
 	[SRETURN]     = "SRETURN",
 	[SIMPORT]     = "SIMPORT",
 	[SSIGN]       = "SSIGN",
@@ -277,7 +278,7 @@ printconvtab(FILE *fd, intptr convtab, int nconv)
 		SConv *c = (SConv*) ftptr(&ftast, convtab);
 		fprintf(fd, "|");
 		for (int i = 0; i < nconv; i++) {
-			fprintf(fd, " %s => %s |", identstr(c[i].gen), identstr(c[i].real));	
+			fprintf(fd, " %s => %s |", identstr(c[i].gen), identstr(c[i].real));
 		}
 		return;
 	}
@@ -407,6 +408,13 @@ printstmt(FILE *fd, intptr stmt)
 			fprintf(fd, ", ");
 			printexpr(fd, paramtab[i]);
 		}
+		fprintf(fd, ")");
+		return;
+	}
+	case SACCESSMOD: {
+		SAccessMod *a = (SAccessMod*) ptr;
+		fprintf(fd, "%s(%s, ", stmtstrs[*ptr], identstr(a->mod));
+		printstmt(fd, a->stmt);
 		fprintf(fd, ")");
 		return;
 	}
@@ -1090,6 +1098,28 @@ parse_fun_stmt(const ETok *t, const ETok *eoe, intptr *stmt)
 		}
 
 		if (t[i] == DOT || t[i] == LBRACKETS) {
+			if (t[i] == DOT) {
+				i++;
+				if (t[i] == IDENTIFIER) {
+					i++;
+					int fun = t[i];
+					i++;
+					if (t[i] == LPAREN) {
+						i++;
+						intptr maddr = ftalloc(&ftast, sizeof(SAccessMod));
+						*stmt = maddr;
+						SAccessMod *a = (SAccessMod*) ftptr(&ftast, maddr);
+						a->kind = SACCESSMOD;
+						a->mod = ident;
+						res = parse_stmt_call(t + i, eoe, fun, &a->stmt);
+						break;
+					}
+					i--;
+					i--;
+				}
+				i--;
+			}
+
 			intptr expr = -1;
 			i -= 2;
 
