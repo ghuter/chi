@@ -1,0 +1,71 @@
+f :: fun () i32 {
+	x :: 10;
+	HasherI32.hash(@x);
+	return HasherI32.hash(@x);
+}
+
+Hasher :: signature [T] {
+	AStruct :: struct {
+		x: ^T;
+	}
+	hash :: fun (v: ^T) i32;
+}
+
+HasherI32 :: impl Hasher [i32] {
+	hash :: fun (v: ^i32) i32 {
+		i :: 10;
+		a :: AStruct {x: @i};
+		return ^a.x;
+	}
+}
+
+HasherI8 :: impl Hasher [i8] {
+	hash :: fun (v: ^i8) i32 {
+		return 0;
+	}
+}
+
+HashMap :: signature [K, V] (H: Hasher[K]) {
+	// Generic type must be used as pointer because they are translated into void*.
+	Node :: struct {
+		key: ^K;
+		value: ^V;
+	}
+
+	Map :: struct {
+		nodes: ^Node;
+		nnode: u32;
+	}
+
+	insert :: fun (map: Map, key: ^K, value: ^V) bool;
+	get :: fun (map: Map, key: ^K) ^V;
+}
+
+MachinChose :: impl HashMap [i32, i32] (H: HasherI32) {
+	insert :: fun (map: Map, key: ^i32, value: ^i32) bool {
+		return true;
+	}
+
+	get :: fun (map: Map, key: ^i32) ^i32 {
+		x :: 10;
+		return @x;
+	}
+}
+
+SHashMap :: skeleton HashMap {
+
+	insert :: fun (map: Map, key: ^K, value: ^V) bool {
+		return true;
+	}
+
+	get :: fun (map: Map, key: ^K) ^V {
+		nodes :: map.nodes;
+		n :: ^nodes;
+
+		H.hash(key);
+		x :: H.hash(key);
+		return n.value;
+	}
+}
+
+I32Map :: define SHashMap [i32, i32] (H: HasherI32);

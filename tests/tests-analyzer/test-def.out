@@ -1,0 +1,3 @@
+SMODSIGN(Stringer, [], (), {SSIGN(string) : ^u8})
+SMODSKEL(SStringer, SFUN(string, {SRETURN(ECSTS(hello))}) : ^u8}) : Stringer
+SMODDEF(DSStringer, [], (), | |) : SStringer

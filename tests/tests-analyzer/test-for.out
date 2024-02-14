@@ -1,0 +1,1 @@
+SFUN(f, {SSEQ(const SDECL(x, ECSTI(10)) : i32, SFOR(SDECL(i, ECSTI(0)) : i32, EBINOP(LT, EMEM(i) : i32, EMEM(x) : i32) : bool, SASSIGN(i, EBINOP(ADD, EMEM(i) : i32, ECSTI(1)) : i32), const SDECL(x, ECSTI(1)) : i32))}) : void

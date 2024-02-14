@@ -1,0 +1,1 @@
+SMODSIGN(Signature, [], (), {SSTRUCT(Struct, x : i32), SSIGN(Function) : void})

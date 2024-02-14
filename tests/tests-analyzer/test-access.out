@@ -1,0 +1,2 @@
+SSTRUCT(Point, x : i32, y : i32)
+SFUN(f, {SSEQ(SDECL(p, ESTRUCT(Point { <x : ECSTI(0)> <y : ECSTI(0)> })) : Point, SSEQ(SEXPRASSIGN(EACCESS(EMEM(p) : Point.x) : i32, ECSTI(10)), const SDECL(x, EACCESS(EMEM(p) : Point.x) : i32) : i32))}) : void

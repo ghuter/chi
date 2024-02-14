@@ -1,0 +1,9 @@
+Stringer :: signature {
+	string :: fun () ^u8;
+}
+
+HelloString :: impl Stringer {
+	string :: fun () ^u8 {
+		return "hello";
+	}
+}

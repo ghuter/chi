@@ -1,0 +1,2 @@
+SMODSIGN(Stringer, [], (), {SSIGN(string) : ^u8})
+SMODIMPL(HelloString, [], (), | |, {SFUN(string, {SRETURN(ECSTS(hello))}) : ^u8}) : Stringer

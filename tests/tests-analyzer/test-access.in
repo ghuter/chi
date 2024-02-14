@@ -1,0 +1,14 @@
+Point :: struct {
+	x: i32;
+	y: i32;
+}
+
+f :: fun () {
+	p := Point {
+		x: 0,
+		y: 0,
+	};
+
+	p.x = 10;
+	x :: p.x;
+}

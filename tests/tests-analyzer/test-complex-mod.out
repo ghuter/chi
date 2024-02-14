@@ -1,0 +1,8 @@
+SFUN(f, {SSEQ(const SDECL(x, ECSTI(10)) : i32, SSEQ(SACCESSMOD(HasherI32, SCALL(hash, EUNOP(AT, EMEM(x) : i32) : ^i32)), SRETURN(ECALL(EACCESS(EMEM(HasherI32) : ?.hash) : ?, EUNOP(AT, EMEM(x) : i32) : ^i32) : i32)))}) : i32
+SMODSIGN(Hasher, [T], (), {SSTRUCT(AStruct, x : ^T), SSIGN(hash, v : ^T) : i32})
+SMODSIGN(HashMap, [K, V], (H: Hasher[K]), {SSTRUCT(Node, key : ^K, value : ^V), SSTRUCT(Map, nodes : ^Node, nnode : u32), SSIGN(insert, map : Map, key : ^K, value : ^V) : bool, SSIGN(get, map : Map, key : ^K) : ^V})
+SMODIMPL(HasherI32, [i32], (), | T => i32 |, {SFUN(hash, v : ^i32, {SSEQ(const SDECL(i, ECSTI(10)) : i32, SSEQ(const SDECL(a, ESTRUCT(AStruct { <x : EUNOP(AT, EMEM(i) : i32) : ^i32> })) : AStruct, SRETURN(EUNOP(DEREF, EACCESS(EMEM(a) : AStruct.x) : ^i32) : i32)))}) : i32}) : Hasher
+SMODIMPL(HasherI8, [i8], (), | T => i8 |, {SFUN(hash, v : ^i8, {SRETURN(ECSTI(0))}) : i32}) : Hasher
+SMODIMPL(MachinChose, [i32, i32], (H: HasherI32[]), | K => i32 | V => i32 |, {SFUN(insert, map : Map, key : ^i32, value : ^i32, {SRETURN(ETRUE)}) : bool, SFUN(get, map : Map, key : ^i32, {SSEQ(const SDECL(x, ECSTI(10)) : i32, SRETURN(EUNOP(AT, EMEM(x) : i32) : ^i32))}) : ^i32}) : HashMap
+SMODSKEL(SHashMap, SFUN(insert, map : Map, key : ^K, value : ^V, {SRETURN(ETRUE)}) : bool, SFUN(get, map : Map, key : ^K, {SSEQ(const SDECL(nodes, EACCESS(EMEM(map) : Map.nodes) : ^Node) : ^Node, SSEQ(const SDECL(n, EUNOP(DEREF, EMEM(nodes) : ^Node) : Node) : Node, SSEQ(SACCESSMOD(H, SCALL(hash, EMEM(key) : ^K)), SSEQ(const SDECL(x, ECALL(EACCESS(EMEM(H) : ?.hash) : ?, EMEM(key) : ^K) : i32) : i32, SRETURN(EACCESS(EMEM(n) : Node.value) : ^V)))))}) : ^V}) : HashMap
+SMODDEF(I32Map, [i32, i32], (H: HasherI32[]), | K => i32 | V => i32 |) : SHashMap

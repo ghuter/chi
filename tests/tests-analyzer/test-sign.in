@@ -1,0 +1,6 @@
+Signature :: signature {
+	Struct :: struct {
+		x: i32;
+	}
+	Function :: fun ();
+}
