@@ -1,5 +1,5 @@
-SMODIMPL(A, [], (), {SSIGN(f) : void}) : X
-SMODIMPL(B, [T], (), {SSIGN(f) : void}) : X
-SMODIMPL(C, [K, V], (), {SSIGN(f) : void}) : X
-SMODIMPL(D, [K, V], (M: Module[]), {SSIGN(f) : void}) : X
-SMODIMPL(E, [K, V], (M: Module[K, V]), {SSIGN(f) : void}) : X
+SMODIMPL(A, [], (), | |, {SSIGN(f) : void}) : X
+SMODIMPL(B, [T], (), | |, {SSIGN(f) : void}) : X
+SMODIMPL(C, [K, V], (), | |, {SSIGN(f) : void}) : X
+SMODIMPL(D, [K, V], (M: Module[]), | |, {SSIGN(f) : void}) : X
+SMODIMPL(E, [K, V], (M: Module[K, V]), | |, {SSIGN(f) : void}) : X

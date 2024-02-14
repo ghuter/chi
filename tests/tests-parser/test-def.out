@@ -1,3 +1,3 @@
-SMODDEF(A, [i32], [i32], ()) : X
-SMODDEF(B, [i32, String], [i32, String], ()) : X
-SMODDEF(B, [i32, String], [i32, String], (M: HashI32[])) : X
+SMODDEF(A, [i32], (), | |) : X
+SMODDEF(B, [i32, String], (), | |) : X
+SMODDEF(B, [i32, String], (M: HashI32[]), | |) : X
