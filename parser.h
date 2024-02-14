@@ -39,7 +39,9 @@ typedef enum {
 	SSIGN,
 	SMODSIGN,
 	SMODIMPL,
+	SDECLMODIMPL,
 	SMODSKEL,
+	SDECLMODSKEL,
 	SMODDEF,
 	NSTATEMENT,
 } EStmt;
@@ -181,6 +183,8 @@ typedef struct {
 	intptr stmts; // [UnknownStmt]
 } SModImpl;
 
+typedef SModImpl SDeclModImpl;
+
 typedef struct {
 	EStmt kind;
 	// Impl name:
@@ -193,6 +197,8 @@ typedef struct {
 	int nstmt;
 	intptr stmts;
 } SModSkel;
+
+typedef SModSkel SDeclModSkel;
 
 typedef struct {
 	EStmt kind;

@@ -95,25 +95,27 @@ extern FatArena ftlit;
 
 const char *stmtstrs[NSTATEMENT] = {
 	[SNOP]         = "SNOP",
-	[SSEQ]        = "SSEQ",
-	[SSTRUCT]     = "SSTRUCT",
-	[SENUM]       = "SENUM",
-	[SFUN]        = "SFUN",
-	[SDECL]       = "SDECL",
-	[SIF]         = "SIF",
-	[SELSE]       = "SELSE",
-	[SASSIGN]     = "SASSIGN",
-	[SFOR]        = "SFOR",
-	[SCALL]       = "SCALL",
-	[SACCESSMOD]  = "SACCESSMOD",
-	[SRETURN]     = "SRETURN",
-	[SIMPORT]     = "SIMPORT",
-	[SSIGN]       = "SSIGN",
-	[SMODSIGN]    = "SMODSIGN",
-	[SMODIMPL]    = "SMODIMPL",
-	[SMODSKEL]    = "SMODSKEL",
-	[SMODDEF]     = "SMODDEF",
-	[SEXPRASSIGN] = "SEXPRASSIGN",
+	[SSEQ]         = "SSEQ",
+	[SSTRUCT]      = "SSTRUCT",
+	[SENUM]        = "SENUM",
+	[SFUN]         = "SFUN",
+	[SDECL]        = "SDECL",
+	[SIF]          = "SIF",
+	[SELSE]        = "SELSE",
+	[SASSIGN]      = "SASSIGN",
+	[SFOR]         = "SFOR",
+	[SCALL]        = "SCALL",
+	[SACCESSMOD]   = "SACCESSMOD",
+	[SRETURN]      = "SRETURN",
+	[SIMPORT]      = "SIMPORT",
+	[SSIGN]        = "SSIGN",
+	[SMODSIGN]     = "SMODSIGN",
+	[SMODIMPL]     = "SMODIMPL",
+	[SDECLMODIMPL] = "SDECLMODIMPL",
+	[SMODSKEL]     = "SMODSKEL",
+	[SDECLMODSKEL] = "SDECLMODSKEL",
+	[SMODDEF]      = "SMODDEF",
+	[SEXPRASSIGN]  = "SEXPRASSIGN",
 };
 
 const char *exprstrs[NEXPR] = {
@@ -440,6 +442,7 @@ printstmt(FILE *fd, intptr stmt)
 		fprintf(fd, "})");
 		return;
 	}
+	case SDECLMODIMPL:
 	case SMODIMPL: {
 		SModImpl *s = (SModImpl*) ptr;
 		fprintf(fd, "%s(%s, ", stmtstrs[*ptr], identstr(s->ident));
@@ -460,6 +463,7 @@ printstmt(FILE *fd, intptr stmt)
 		fprintf(fd, "}) : %s", identstr(s->signature));
 		return;
 	}
+	case SDECLMODSKEL:
 	case SMODSKEL: {
 		SModSkel *s = (SModSkel*) ptr;
 		fprintf(fd, "%s(%s, ", stmtstrs[*ptr], identstr(s->ident));
@@ -1444,8 +1448,6 @@ parse_toplevel_impl(const ETok *t, const intptr ident, intptr *stmt)
 	intptr generics = -1;
 	intptr modules = -1;
 	intptr signature = -1;
-	intptr stmtlst = -1;
-	int nstmt = 0;
 
 	if (t[i] != IDENTIFIER) {
 		ERR("Found <%s>, but an implementation expects a signature identifier.", tokenstrs[t[i]]);
@@ -1470,25 +1472,31 @@ parse_toplevel_impl(const ETok *t, const intptr ident, intptr *stmt)
 	}
 	i += res;
 
-	res = parse_stmts(t + i, &stmtlst, &nstmt);
+	*stmt = ftalloc(&ftast, sizeof(SModImpl));
+	SModImpl *s = (SModImpl*) ftptr(&ftast, *stmt);
+	s->ident = ident;
+	s->signature = signature;
+	s->generics = generics;
+	s->modules = modules;
+	s->convtab = -1;
+	s->nconv = 0;
+	s->stmts = -1;
+	s->nstmt = 0;
+	
+	if (t[i] == SEMICOLON) {
+		i++;
+		s->kind = SDECLMODIMPL;
+		return i;
+	}
+
+	res = parse_stmts(t + i, &s->stmts, &s->nstmt);
 	if (res < 0) {
 		ERR("Error when parsing the stmts of a signature.");
 		return -1;
 	}
 	i += res;
 
-	*stmt = ftalloc(&ftast, sizeof(SModImpl));
-	SModImpl *s = (SModImpl*) ftptr(&ftast, *stmt);
 	s->kind = SMODIMPL;
-	s->ident = ident;
-	s->signature = signature;
-	s->generics = generics;
-	s->modules = modules;
-	s->nstmt = nstmt;
-	s->stmts = stmtlst;
-	s->convtab = -1;
-	s->nconv = 0;
-
 	return i;
 }
 
@@ -1499,8 +1507,6 @@ parse_toplevel_skeleton(const ETok *t, const intptr ident, intptr *stmt)
 	int res = -1;
 
 	intptr signature = -1;
-	intptr stmtlst = -1;
-	int nstmt = 0;
 
 	if (t[i] != IDENTIFIER) {
 		ERR("Found <%s>, but an implementation expects a signature identifier.", tokenstrs[t[i]]);
@@ -1511,20 +1517,27 @@ parse_toplevel_skeleton(const ETok *t, const intptr ident, intptr *stmt)
 	signature = t[i];
 	i++;
 
-	res = parse_stmts(t + i, &stmtlst, &nstmt);
+	*stmt = ftalloc(&ftast, sizeof(SModSkel));
+	SModSkel *s = (SModSkel*) ftptr(&ftast, *stmt);
+	s->ident = ident;
+	s->signature = signature;
+	s->stmts = -1;
+	s->nstmt = 0;
+
+	if (t[i] == SEMICOLON) {
+		i++;
+		s->kind = SDECLMODSKEL;
+		return i;
+	}
+
+	res = parse_stmts(t + i, &s->stmts, &s->nstmt);
 	if (res < 0) {
 		ERR("Error when parsing the stmts of a signature.");
 		return -1;
 	}
 	i += res;
 
-	*stmt = ftalloc(&ftast, sizeof(SModSkel));
-	SModSkel *s = (SModSkel*) ftptr(&ftast, *stmt);
 	s->kind = SMODSKEL;
-	s->ident = ident;
-	s->signature = signature;
-	s->stmts = stmtlst;
-	s->nstmt = nstmt;
 	return i;
 }
 
@@ -2479,9 +2492,11 @@ parse_tokens(const ETok *t, Symbols *signatures, Symbols *identsym, Symbols *typ
 		case SMODDEF:
 			add++;
 		// fallthrough
+		case SDECLMODSKEL:
 		case SMODSKEL:
 			add++;
 		// fallthrough
+		case SDECLMODIMPL:
 		case SMODIMPL:
 			add++;
 		// fallthrough

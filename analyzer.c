@@ -336,21 +336,6 @@ searchreal(intptr convtab, int nconv, intptr generic)
 	return -1;
 }
 
-static SFun*
-searchfun(intptr stmts, int nstmt, intptr ident)
-{
-	intptr *stmt = (intptr*) ftptr(&ftast, stmts);
-	for (int i = 0; i < nstmt; i++) {
-		SFun *fun = (SFun*) ftptr(&ftast, stmt[i]);
-		if (fun->kind == SFUN) { 
-			if (fun->ident == ident) {
-				return fun;
-			}
-		}
-	}
-	return NULL;
-}
-
 static SSign*
 searchsig(intptr stmts, int nstmt, intptr ident)
 {
@@ -902,14 +887,14 @@ searchmodsign(intptr realmod, intptr *convtab, int *nconv)
 		}
 
 		SModSkel *skel = (SModSkel*) ftptr(&ftast, sym->stmt);
-		assert(skel->kind == SMODSKEL);
+		assert(skel->kind == SMODSKEL || skel->kind == SDECLMODSKEL);
 		sym = searchtopdcl(modsym + MODSIGN, skel->signature);
 
 		*convtab = def->convtab;
 		*nconv = def->nconv;
 	} else {
 		SModImpl *impl = (SModImpl*) ftptr(&ftast, sym->stmt);
-		assert(impl->kind == SMODIMPL);
+		assert(impl->kind == SMODIMPL || impl->kind == SDECLMODIMPL);
 		sym = searchtopdcl(modsym + MODSIGN, impl->signature);
 
 		*convtab = impl->convtab;
@@ -2061,7 +2046,7 @@ getmodinfo(intptr module, intptr *generics, intptr *signature)
 	s = searchtopdcl(modsym + MODIMPL, module);
 	if (s != NULL) {
 		SModImpl *i = (SModImpl*) ftptr(&ftast, s->stmt);
-		assert(i->kind == SMODIMPL);
+		assert(i->kind == SMODIMPL || i->kind == SDECLMODIMPL);
 		*generics = i->generics;
 		*signature = i->signature;
 		return 1;
@@ -2078,7 +2063,7 @@ getmodinfo(intptr module, intptr *generics, intptr *signature)
 			return 0;
 		}
 		SModSkel *sk = (SModSkel*) ftptr(&ftast, skel->stmt);
-		assert(sk->kind == SMODSKEL);
+		assert(sk->kind == SMODSKEL || sk->kind == SDECLMODSKEL);
 
 		*generics = d->generics;
 		*signature = sk->signature;
@@ -2349,6 +2334,10 @@ analyzemodimpl(SModImpl *impl)
 		return 0;
 	}
 
+	if (impl->kind == SDECLMODIMPL) {
+		return 1;
+	}
+
 	// Verify the stmts.
 	if (!impl_verify_stmts(impl, sign)) {
 		ERR("Error when analyzing <%s>.", identstr(impl->ident));
@@ -2407,6 +2396,10 @@ analyzemodskel(SModSkel *skel)
 
 	SModSign *sign = (SModSign*) ftptr(&ftast, s->stmt);
 	assert(sign->kind == SMODSIGN);
+
+	if (skel->kind == SDECLMODSKEL) {
+		return 1;
+	}
 
 	if (skel->nstmt > sign->nstmt) {
 		ERR("There is more stmt in the skeleton than in the signature.");
@@ -2469,7 +2462,7 @@ analyzemoddef(SModDef *def)
 	}
 
 	SModSkel *skel = (SModSkel*) ftptr(&ftast, s->stmt);
-	assert(skel->kind == SMODSKEL);
+	assert(skel->kind == SMODSKEL || skel->kind == SDECLMODSKEL);
 
 	// Get the skel signature.
 	s = searchtopdcl(modsym + MODSIGN, skel->signature);
