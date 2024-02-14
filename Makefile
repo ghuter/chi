@@ -55,10 +55,12 @@ clean:
 tests: $(BIN)
 	sh tests/test.sh ./lexer tests/tests-lexer
 	sh tests/test.sh ./parser tests/tests-parser
+	sh tests/test.sh ./analyzer tests/tests-analyzer
 
 rebuild-test:
 	sh tests/build-test.sh ./lexer tests/tests-lexer
 	sh tests/build-test.sh ./parser tests/tests-parser
+	sh tests/build-test.sh ./analyzer tests/tests-analyzer
 
 .PHONY: all clean format rebuild-test
 

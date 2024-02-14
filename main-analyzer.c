@@ -161,7 +161,7 @@ main(int argc, char *argv[])
 		assert(analyzeglobalcst(decl, nsym));
 		nsym++;
 	}
-	printsymbolsinfo(nsym);
+	printsymbolsinfo(stdout, nsym);
 
 	Symbol *symsign = (Symbol*) ftptr(&ftsym, modsym[MODSIGN].array);
 	for (int i = 0; i < modsym[MODSIGN].nsym; i++) {
@@ -195,12 +195,12 @@ main(int argc, char *argv[])
 		assert(analyzefun(NULL, fun, stmt, nsym));
 	}
 
-	printsymbols(&typesym);
-	printsymbols(&identsym);
-	printsymbols(&funsym);
+	printsymbols(stdout, &typesym);
+	printsymbols(stdout, &identsym);
+	printsymbols(stdout, &funsym);
 
 	for (int i = 0; i < NMODSYM; i++) {
-		printsymbols(modsym + i);
+		printsymbols(stdout, modsym + i);
 	}
 
 }

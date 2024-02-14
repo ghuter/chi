@@ -272,36 +272,37 @@ static const int promotiontable[NLANGTYPE][NLANGTYPE] = {
 
 static Bool computeconstype(intptr expr, intptr *type, int *ptrlvl, intptr typeinfo);
 static Bool analyzefunexpr(AnalyzeCtx *ctx, intptr expr, intptr *type, int *ptrlvl, intptr typeinfo, int nsym);
+static Bool analyzeimplcall(AnalyzeCtx *ctx, ECall *call, Mem *expr, SSign *fun, intptr convtab, int nconv, int nsym, intptr *type, int *ptrlvl);
 
 void
-printsymbols(Symbols *syms)
+printsymbols(FILE *fd, Symbols *syms)
 {
 	Symbol *sym = (Symbol*) ftptr(&ftsym, syms->array);
 	for (int i = 0; i < syms->nsym; i++) {
-		printstmt(stderr, sym[i].stmt);
-		fprintf(stderr, "\n");
+		printstmt(fd, sym[i].stmt);
+		fprintf(fd, "\n");
 	}
 }
 
 void
-printsymbolsinfo(int nsym)
+printsymbolsinfo(FILE* fd, int nsym)
 {
 	for (int i = nsym - 1; i >= 0; i--) {
 		if (syminfo[i].cst) {
-			fprintf(stderr, "const ");
+			fprintf(fd, "const ");
 		}
-		fprintf(stderr, "%s : ", identstr(syminfo[i].ident));
+		fprintf(fd, "%s : ", identstr(syminfo[i].ident));
 		int ptrlvl = syminfo[i].ptrlvl;
 		while (ptrlvl-- > 0) {
-			fprintf(stderr, "^");
+			fprintf(fd, "^");
 		}
 
 		char *type = TYPESTR(syminfo[i].type);
-		fprintf(stderr, "%s, ", type);
+		fprintf(fd, "%s, ", type);
 	}
 
 	if (nsym > 0) {
-		fprintf(stderr, "\n");
+		fprintf(fd, "\n");
 	}
 }
 
@@ -714,7 +715,7 @@ analyzebinop(AnalyzeCtx *ctx, EBinop *binop, intptr *type, int *ptrlvl, intptr t
 			return 0;
 		}
 
-		if (!islangtype(type1) || !islangtype(type2)) {
+		if (!(islangtype(type1) && islangtype(type2)) && (ptrlvl1 < 1 || ptrlvl2 < 1)) {
 			ERR("Error, binops can only be done on the language types.");
 			TODO("Verify if it's a ptr...");
 			return 0;
@@ -809,6 +810,11 @@ analyzeunop(AnalyzeCtx *ctx, EUnop *unop, intptr *type, int *ptrlvl, intptr type
 	case UOP_DEREF:
 		if (!analyzefunexpr(ctx, unop->expr, &unop->type, &unop->ptrlvl, typeinfo, nsym)) {
 			ERR("Error when computing an unop <%s>.", uopstrs[unop->op]);
+			return 0;
+		}
+
+		if (isgeneric(unop->type)) {
+			ERR("Cannot deref a generic <%s>.", identstr(unop->type));
 			return 0;
 		}
 
@@ -963,11 +969,13 @@ analyzestruct(AnalyzeCtx *ctx, EStruct *st, intptr *type, int nsym)
 }
 
 static Bool
-analyzesignparams(AnalyzeCtx *ctx, ECall *call, Mem *expr, SSign *fun, intptr convtab, int nconv, int nsym)
+analyzesignparams(AnalyzeCtx *ctx, intptr callparams, int ncallparam, intptr identmod, SSign *fun, intptr convtab, int nconv, int nsym)
 {
-	intptr *exprs = (intptr*) ftptr(&ftast, call->params);
+	intptr *exprs = (intptr*) ftptr(&ftast, callparams);
 	SMember *params = (SMember*) ftptr(&ftast, fun->params);
-	for (int i = 0; i < call->nparam; i++) {
+
+	assert(ncallparam == fun->nparam);
+	for (int i = 0; i < ncallparam; i++) {
 		intptr realtype = -1;
 		getrealtype(params[i].type, convtab, nconv, realtype);
 		assert(realtype > 0);
@@ -981,7 +989,7 @@ analyzesignparams(AnalyzeCtx *ctx, ECall *call, Mem *expr, SSign *fun, intptr co
 
 		if (type != realtype || ptrlvl != params[i].ptrlvl) {
 			ERR("The expression type used as the param <%s> of the function <%s> in the module <%s> doesn't match.",
-			identstr(params[i].ident), identstr(fun->ident), identstr(expr->addr));
+			identstr(params[i].ident), identstr(fun->ident), identstr(identmod));
 			ERR("Found <%s ptrlvl(%d)> but expects <%s ptrlvl(%d)>.", identstr(type), ptrlvl, identstr(realtype), params[i].ptrlvl);
 
 			return 0;
@@ -1048,11 +1056,13 @@ analyzeskelreturn(ECall *call, Mem *expr, SSign *fun, SGenerics *skelgen, SGener
 }
 
 static Bool
-analyzeskelparams(AnalyzeCtx *ctx, ECall *call, Mem *expr, SSign *fun, SGenerics *skelgen, SGenerics *signgen, int nsym)
+analyzeskelparams(AnalyzeCtx *ctx, intptr callparams, int ncallparam, intptr identmod, SSign *fun, SGenerics *skelgen, SGenerics *signgen, int nsym)
 {
-	intptr *exprs = (intptr*) ftptr(&ftast, call->params);
+	intptr *exprs = (intptr*) ftptr(&ftast, callparams);
 	SMember *params = (SMember*) ftptr(&ftast, fun->params);
-	for (int i = 0; i < call->nparam; i++) {
+
+	assert(ncallparam = fun->nparam);
+	for (int i = 0; i < ncallparam; i++) {
 		intptr realtype = params[i].type;
 		if (isgeneric(realtype)) {
 			realtype = convgen(signgen, skelgen, realtype);	
@@ -1067,7 +1077,7 @@ analyzeskelparams(AnalyzeCtx *ctx, ECall *call, Mem *expr, SSign *fun, SGenerics
 
 		if (type != realtype || ptrlvl != params[i].ptrlvl) {
 			ERR("The expression type used as the param <%s> of the function <%s> in the module <%s> doesn't match.",
-			identstr(params[i].ident), identstr(fun->ident), identstr(expr->addr));
+			identstr(params[i].ident), identstr(fun->ident), identstr(identmod));
 			ERR("Found <%s ptrlvl(%d)> but expects <%s ptrlvl(%d)>.", identstr(type), ptrlvl, identstr(realtype), params[i].ptrlvl);
 
 			return 0;
@@ -1077,46 +1087,33 @@ analyzeskelparams(AnalyzeCtx *ctx, ECall *call, Mem *expr, SSign *fun, SGenerics
 	return 1;
 }
 
-static Bool
-analyzetopmodcall(AnalyzeCtx *ctx, EAccess *a, ECall *call, Mem *expr, intptr *type, int *ptrlvl, int nsym)
+static SSign*
+searchtopcall(intptr identfun, intptr identmod, intptr *convtab, int *nconv)
 {
-	intptr convtab = -1;
-	int nconv = 0;
-
-	SModSign *sign = searchmodsign(expr->addr, &convtab, &nconv);
+	SModSign *sign = searchmodsign(identmod, convtab, nconv);
 	if (sign == NULL) {
-		ERR("The signature of the module <%s> can't be found.", identstr(expr->addr));
+		ERR("The signature of the module <%s> can't be found.", identstr(identmod));
 		return 0;
 	}
 
-	SSign *fun = searchsig(sign->stmts, sign->nstmt, a->ident);
+	SSign *fun = searchsig(sign->stmts, sign->nstmt, identfun);
 	if (fun == NULL) {
-		ERR("The function <%s> isn't declared in the signature <%s>.", identstr(a->ident), identstr(sign->ident));
+		ERR("The function <%s> isn't declared in the signature <%s>.", identstr(identfun), identstr(sign->ident));
 		return 0;
 	}
 
-	if(!analyzesignreturn(call, expr, fun, convtab, nconv, type, ptrlvl)) {
-		ERR("Error when analyzing the return type of a module function.");
-		return 0;
-	}
-
-	if (!analyzesignparams(ctx, call, expr, fun, convtab, nconv, nsym)) {
-		ERR("Error when analyzing the params of a module function.");
-		return 0;
-	}
-
-	return 1;
+	return fun;
 }
 
-static Bool
-analyzeimplmodcall(AnalyzeCtx *ctx, EAccess *a, ECall *call, Mem *expr, intptr *type, int *ptrlvl, int nsym)
+static SSign*
+searchimplcall(AnalyzeCtx *ctx, intptr identfun, intptr identmod, intptr *convtab, int *nconv)
 {
 	assert(ctx->impl->kind == SMODIMPL);
 
 	// search among the module params of the impl.
 	intptr modules = ctx->impl->modules;
 	if (modules == -1) {
-		ERR("Calling a function from the module <%s> which is not declared in the impl <%s>.", identstr(expr->addr), identstr(ctx->impl->ident));
+		ERR("Calling a function from the module <%s> which is not declared in the impl <%s>.", identstr(identmod), identstr(ctx->impl->ident));
 		return 0;
 	}
 
@@ -1124,37 +1121,42 @@ analyzeimplmodcall(AnalyzeCtx *ctx, EAccess *a, ECall *call, Mem *expr, intptr *
 	SSignature *signs = (SSignature*) ftptr(&ftast, s->signs);
 	intptr isign = -1;
 	for (int i = 0; i < s->nsign; i++) {
-		if (signs[i].ident == expr->addr) {
+		if (signs[i].ident == identmod) {
 			isign = signs[i].signature;
 			break;
 		}
 	}
 
 	if (isign == -1) {
-		ERR("Calling a function from the signatures <%s> which is not declared in the impl <%s>.", identstr(expr->addr), identstr(ctx->impl->ident));
+		ERR("Calling a function from the signatures <%s> which is not declared in the impl <%s>.", identstr(identmod), identstr(ctx->impl->ident));
 		return 0;
 	}
 
-	intptr convtab = -1;
-	int nconv = 0;
-	SModSign *sign = searchmodsign(isign, &convtab, &nconv);
+	SModSign *sign = searchmodsign(isign, convtab, nconv);
 	if (sign == NULL) {
 		ERR("Can't find the signature of the module <%s>.", identstr(isign));
 		return 0;
 	}
 
-	SSign *fun = searchsig(sign->stmts, sign->nstmt, a->ident);
+	SSign *fun = searchsig(sign->stmts, sign->nstmt, identfun);
 	if (fun == NULL) {
-		ERR("The function <%s> isn't declared in the signature <%s>.", identstr(a->ident), identstr(sign->ident));
+		ERR("The function <%s> isn't declared in the signature <%s>.", identstr(identfun), identstr(sign->ident));
 		return 0;
 	}
 
+	return fun;
+
+}
+
+static Bool
+analyzeimplcall(AnalyzeCtx *ctx, ECall *call, Mem *expr, SSign *fun, intptr convtab, int nconv, int nsym, intptr *type, int *ptrlvl)
+{
 	if(!analyzesignreturn(call, expr, fun, convtab, nconv, type, ptrlvl)) {
 		ERR("Error when analyzing the return type of a module function.");
 		return 0;
 	}
 
-	if (!analyzesignparams(ctx, call, expr, fun, convtab, nconv, nsym)) {
+	if (!analyzesignparams(ctx, call->params, call->nparam, expr->addr, fun, convtab, nconv, nsym)) {
 		ERR("Error when analyzing the params of a module function.");
 		return 0;
 	}
@@ -1163,18 +1165,28 @@ analyzeimplmodcall(AnalyzeCtx *ctx, EAccess *a, ECall *call, Mem *expr, intptr *
 }
 
 static Bool
-analyzeskelmodcall(AnalyzeCtx *ctx, EAccess *a, ECall *call, Mem *expr, intptr *type, int *ptrlvl, int nsym)
+analyzeskelcall(AnalyzeCtx *ctx, ECall *call, Mem *expr, SSign *fun, SGenerics *skelgen, SGenerics *signgen, int nsym, intptr *type, int *ptrlvl)
 {
-	(void) a;
-	(void) call;
-	(void) type;
-	(void) ptrlvl;
-	(void) nsym;
+	if(!analyzeskelreturn(call, expr, fun, skelgen, signgen, type, ptrlvl)) {
+		ERR("Error when analyzing the return type of a module function.");
+		return 0;
+	}
 
+	if (!analyzeskelparams(ctx, call->params, call->nparam, expr->addr, fun, skelgen, signgen, nsym)) {
+		ERR("Error when analyzing the params of a module function.");
+		return 0;
+	}
+
+	return 1;
+}
+
+static SSign*
+searchskelcall(AnalyzeCtx *ctx, intptr identfun, intptr identmod, SGenerics **skelgen, SGenerics **signgen)
+{
 	// does the skel has signatures
 	intptr signatures = ctx->sign->signatures;
 	if (signatures == -1) {
-		ERR("Calling a function from the signatures <%s> which is not declared in the signatures <%s>.", identstr(expr->addr), identstr(ctx->sign->ident));
+		ERR("Calling a function from the signatures <%s> which is not declared in the signatures <%s>.", identstr(identmod), identstr(ctx->sign->ident));
 		return 0;
 	}
 
@@ -1183,15 +1195,15 @@ analyzeskelmodcall(AnalyzeCtx *ctx, EAccess *a, ECall *call, Mem *expr, intptr *
 	SSignature *signs = (SSignature*) ftptr(&ftast, s->signs);
 	SSignature *sign = NULL;
 	for (int i = 0; i < s->nsign; i++) {
-		if (signs[i].ident == expr->addr) {
+		if (signs[i].ident == identmod) {
 			sign = signs + i;
 			break;
 		}
 	}
-	SGenerics *skelgen = (SGenerics*) ftptr(&ftast, sign->generics);
+	*skelgen = (SGenerics*) ftptr(&ftast, sign->generics);
 
 	if (!sign) {
-		ERR("Calling a function from the signatures <%s> which is not declared in the signatures <%s>.", identstr(expr->addr), identstr(ctx->sign->ident));
+		ERR("Calling a function from the signatures <%s> which is not declared in the signatures <%s>.", identstr(identmod), identstr(ctx->sign->ident));
 		return 0;
 	}
 
@@ -1205,25 +1217,15 @@ analyzeskelmodcall(AnalyzeCtx *ctx, EAccess *a, ECall *call, Mem *expr, intptr *
 
 	SModSign *signmod = (SModSign*) ftptr(&ftast, sym->stmt);
 	assert(signmod->kind == SMODSIGN);
-	SGenerics *signgen = (SGenerics*) ftptr(&ftast, signmod->generics);
+	*signgen = (SGenerics*) ftptr(&ftast, signmod->generics);
 
-	SSign *fun = searchsig(signmod->stmts, signmod->nstmt, a->ident);
+	SSign *fun = searchsig(signmod->stmts, signmod->nstmt, identfun);
 	if (fun == NULL) {
-		ERR("The function <%s> isn't declared in the signature <%s>.", identstr(a->ident), identstr(sign->signature));
+		ERR("The function <%s> isn't declared in the signature <%s>.", identstr(identfun), identstr(sign->signature));
 		return 0;
 	}
 
-	if(!analyzeskelreturn(call, expr, fun, skelgen, signgen, type, ptrlvl)) {
-		ERR("Error when analyzing the return type of a module function.");
-		return 0;
-	}
-
-	if (!analyzeskelparams(ctx, call, expr, fun, skelgen, signgen, nsym)) {
-		ERR("Error when analyzing the params of a module function.");
-		return 0;
-	}
-
-	return 1;
+	return fun;
 }
 
 static Bool
@@ -1239,14 +1241,89 @@ analyzemodcall(AnalyzeCtx *ctx, EAccess *a, ECall *call, intptr *type, int *ptrl
 	if (ctx != NULL) {
 		// is a skel
 		if (ctx->impl == NULL) {
-			return analyzeskelmodcall(ctx, a, call, expr, type, ptrlvl, nsym);
+			SGenerics *skelgen = NULL;
+			SGenerics *signgen = NULL;
+
+			SSign *fun = searchskelcall(ctx, a->ident, expr->addr, &skelgen, &signgen);
+			if (fun == NULL) {
+				ERR("Function not found in the skeleton.");
+				return 0;
+			}
+
+			return analyzeskelcall(ctx, call, expr, fun, skelgen, signgen, nsym, type, ptrlvl);
 		}
 		else {
-			return analyzeimplmodcall(ctx, a, call, expr, type, ptrlvl, nsym);
+			intptr convtab = -1;
+			int nconv = 0;
+
+			SSign *fun = searchimplcall(ctx, a->ident, expr->addr, &convtab, &nconv);
+			if (fun == NULL) {
+				ERR("Function not found in the impl.");
+				return 0;
+			}
+
+			return analyzeimplcall(ctx, call, expr, fun, convtab, nconv, nsym, type, ptrlvl);
 		}
 	}
 
-	return analyzetopmodcall(ctx, a, call, expr, type, ptrlvl, nsym);
+	intptr convtab = -1;
+	int nconv = 0;
+
+	SFun *fun = searchtopcall(a->ident, expr->addr, &convtab, &nconv);
+	if (fun == NULL) {
+		ERR("Function not found in the modules.");
+	}
+
+	return analyzeimplcall(ctx, call, expr, fun, convtab, nconv, nsym, type, ptrlvl);
+}
+
+
+static Bool
+analyzestmtmodcall(AnalyzeCtx *ctx, SAccessMod *a, int nsym)
+{
+	(void) ctx;
+	SCall *call = (SCall*) ftptr(&ftast, a->stmt);
+	if (call->kind != SCALL) {
+		ERR("Unexpected statement <%s>, statement module call can only be followed by a statement function call.", exprstrs[call->kind]);
+		return 0;
+	}
+
+	// is an impl or a skel
+	if (ctx != NULL) {
+		// is a skel
+		if (ctx->impl == NULL) {
+			SGenerics *skelgen = NULL;
+			SGenerics *signgen = NULL;
+
+			SSign *fun = searchskelcall(ctx, call->ident, a->mod, &skelgen, &signgen);
+			if (fun == NULL) {
+				ERR("Function not found in the skeleton.");
+				return 0;
+			}
+			return analyzeskelparams(ctx, call->params, call->nparam, a->mod, fun, skelgen, signgen, nsym);
+		}
+		else {
+			intptr convtab = -1;
+			int nconv = 0;
+
+			SSign *fun = searchimplcall(ctx, call->ident, a->mod, &convtab, &nconv);
+			if (fun == NULL) {
+				ERR("Function not found in the impl.");
+				return 0;
+			}
+			return analyzesignparams(ctx, call->params, call->nparam, a->mod, fun, convtab, nconv, nsym);
+		}
+	}
+
+	intptr convtab = -1;
+	int nconv = 0;
+
+	SFun *fun = searchtopcall(call->ident, a->mod, &convtab, &nconv);
+	if (fun == NULL) {
+		ERR("Function not found in the modules.");
+	}
+
+	return analyzesignparams(ctx, call->params, call->nparam, a->mod, fun, convtab, nconv, nsym);
 }
 
 static Bool
@@ -1617,9 +1694,9 @@ analyzefunstmt(AnalyzeCtx *ctx, const SFun *fun, int *nsym, int block, intptr st
 		return 1;
 	}
 	case SACCESSMOD: {
+		SAccessMod *a = (SAccessMod*) unknown;
 		INFO("SACCESSMOD");
-		TODO("Module fun call.");
-		return 0;
+		return analyzestmtmodcall(ctx, a, *nsym);
 	}
 	case SASSIGN: {
 		INFO("SASSIGN");
@@ -1922,7 +1999,7 @@ sign_analyze_stmt(SModSign *sign, SGenerics *g, intptr stmt)
 	case SSIGN: {
 		SSign *s = (SSign*) unknown;
 		// Verify return type
-		if (!sign_is_type_exist(sign, g, s->type, s->ptrlvl, 1)) {
+		if (s->type != -1 && !sign_is_type_exist(sign, g, s->type, s->ptrlvl, 1)) {
 			ERR("Using an undefined type <%s>.", identstr(s->type));
 			ERR("In the fun <%s>.", identstr(s->ident));
 			return 0;

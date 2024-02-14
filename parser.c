@@ -747,7 +747,6 @@ parse_stmt_assignexpr(const ETok *t, const ETok *eoe, const intptr left, intptr 
 		return -1;
 	}
 
-	printstmt(stderr, *stmt);
 	// consume `;`
 	i++;
 	return i;
