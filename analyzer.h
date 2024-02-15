@@ -58,4 +58,5 @@ Bool analyzemodsign(SModSign *sign);
 Bool analyzemodimpl(SModImpl *impl);
 Bool analyzemodskel(SModSkel *skel);
 Bool analyzemoddef(SModDef *def);
+Bool analyzepub(StmtArray *pubsym);
 #endif /* ANALYSE_H */

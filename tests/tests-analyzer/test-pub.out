@@ -1,0 +1,2 @@
+SSTRUCT(Point, x : i32, y : i32)
+SFUN(f, {SRETURN(ECSTI(0))}) : i32

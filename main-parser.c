@@ -53,8 +53,9 @@ main(int argc, char *argv[])
 	int i = 0;
 	int res = -1;
 	intptr stmt = -1;
+	int pub = 0;
 	while (tlst[i] != EOI) {
-		res = parse_toplevel(tlst + i, &stmt);
+		res = parse_toplevel(tlst + i, &stmt, &pub);
 		if (res < 0) {
 			fprintf(stderr, "Error when parsing toplevel stmt.\n");
 			return 1;

@@ -1,0 +1,8 @@
+pub f :: fun () i32 {
+	return 0;
+}
+
+pub Point :: struct {
+	x: i32;
+	y: i32;
+}

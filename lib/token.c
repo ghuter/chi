@@ -18,6 +18,7 @@ char *keywords[NKEYWORDS] = {
 	[SKELETON]  = "skeleton",
 	[DEFINE]    = "define",
 	[AS]        = "as",
+	[PUB]       = "pub",
 };
 
 char *tokenstrs[NKEYWORDS] = {
@@ -39,6 +40,7 @@ char *tokenstrs[NKEYWORDS] = {
 	[SKELETON]      = "SKELETON",
 	[DEFINE]        = "DEFINE",
 	[AS]            = "AS",
+	[PUB]           = "PUB",
 
 	[INT]           = "INT",
 	[FLOAT]         = "FLOAT",

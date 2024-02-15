@@ -2511,3 +2511,179 @@ analyzemoddef(SModDef *def)
 
 	return 1;
 }
+
+static Bool
+ispub(const StmtArray *pubsym, const intptr ident, const EStmt *kind)
+{
+	intptr *array = (intptr*) ftptr(&ftsym, pubsym->stmts);
+	for (int i = 0; i < pubsym->nstmt; i++) {
+		SToplevl *top = (SToplevl*) ftptr(&ftast, array[i]);
+		// names match
+		if (top->ident == ident) {
+			// kind match
+			int j = 0;
+			while (kind[j] != 0) {
+				if (kind[j] == top->kind) {
+					return 1;
+				}
+				j++;
+			}
+		}
+	}
+
+	return 0;
+}
+
+Bool
+analyzepub(StmtArray *pubsym)
+{
+	static const EStmt structkind[] = {SSTRUCT, SNOP};
+	static const EStmt sigkind[] = {SMODSIGN, SNOP};
+	static const EStmt implkind[] = {SMODIMPL, SDECLMODIMPL, SMODDEF, SNOP};
+	static const EStmt skelkind[] = {SMODSKEL, SDECLMODSKEL, SNOP};
+
+	intptr *array = (intptr*) ftptr(&ftsym, pubsym->stmts);
+	for (int i = 0; i < pubsym->nstmt; i++) {
+		UnknownStmt *unknown = (UnknownStmt*) ftptr(&ftast, array[i]);
+		switch (*unknown) {
+			case SSIGN:
+			// fallthrough
+			case SFUN: {
+				SSign *sign = (SSign*) unknown;
+				SMember *m = (SMember*) ftptr(&ftast, sign->params);
+				// verify its params are public.
+				for (int j = 0; j < sign->nparam; j++) {
+					if (!islangtype(m[j].type)) {
+						if (!ispub(pubsym, m[j].type, structkind)) {
+							ERR("Error <%s> is public but not the type <%s> of the param <%s>.", identstr(sign->ident), identstr(m[j].type), identstr(m[j].ident));
+							return 0;
+						}
+					}
+				}
+				break;
+			}
+			case SSTRUCT: {
+				SStruct *st = (SStruct*) unknown;
+				SMember *m = (SMember*) ftptr(&ftast, st->members);
+				// verify its members are public.
+				for (int j = 0; j < st->nmember; j++) {
+					if (!islangtype(m[j].type)) {
+						if (!ispub(pubsym, m[j].type, structkind)) {
+							ERR("Error <%s> is public but not the type <%s> of the param <%s>.", identstr(st->ident), identstr(m[j].type), identstr(m[j].ident));
+							return 0;
+						}
+					}
+				}
+				break;
+			}
+			case SDECLMODIMPL:
+			// fallthrough
+			case SMODIMPL: {
+				SModImpl *i = (SModImpl*) unknown;
+
+				// verify its signature is public.
+				if (!ispub(pubsym, i->signature, sigkind)) {
+					ERR("The public impl <%s> implement a non public signature <%s>.", identstr(i->ident), identstr(i->signature));
+					return 0;
+				}
+
+				// verify its types are public.
+				if (i->generics != -1) {
+					SGenerics *gens = (SGenerics*) ftptr(&ftast, i->generics);
+					intptr *types = (intptr*) ftptr(&ftast, gens->generics);
+					for (int j = 0; j < gens->ngen; j++) {
+						if (!islangtype(types[j])) {
+							if (!ispub(pubsym, types[j], structkind)) {
+								ERR("The public impl <%s> use a non public struct <%s> as generic param.", identstr(i->ident), identstr(types[j]));
+								return 0;
+							}
+						}
+					}
+				}
+
+				// verify its modules are public.
+				if (i->modules != -1) {
+					SSignatures *signs = (SSignatures*) ftptr(&ftast, i->modules);
+					SSignature *sign = (SSignature*) ftptr(&ftast, signs->signs);
+					for (int j = 0; j < signs->nsign; j++) {
+						if (!ispub(pubsym, sign[j].signature, implkind)) {
+							TODO("Is that useful ?");
+							ERR("The public impl <%s> use a non public module <%s>.", identstr(i->ident), identstr(sign[j].signature));
+							return 0;
+						}
+					}
+				}
+				break;
+			}
+			case SMODDEF: {
+				SModDef *def = (SModDef*) unknown;
+				// verify its skeleton is public.
+				if (!ispub(pubsym, def->skeleton, skelkind)) {
+					ERR("The public definition <%s> implement a non public skeleton <%s>.", identstr(def->ident), identstr(def->skeleton));
+					return 0;
+				}
+
+				// verify its types are public.
+				if (def->generics != -1) {
+					SGenerics *gens = (SGenerics*) ftptr(&ftast, def->generics);
+					intptr *types = (intptr*) ftptr(&ftast, gens->generics);
+					for (int j = 0; j < gens->ngen; j++) {
+						if (!islangtype(types[j])) {
+							if (!ispub(pubsym, types[j], structkind)) {
+								ERR("The public impl <%s> use a non public struct <%s> as generic param.", identstr(def->ident), identstr(types[j]));
+								return 0;
+							}
+						}
+					}
+				}
+
+				// verify its modules are public.
+				if (def->modules != -1) {
+					SSignatures *signs = (SSignatures*) ftptr(&ftast, def->modules);
+					SSignature *sign = (SSignature*) ftptr(&ftast, signs->signs);
+					for (int j = 0; j < signs->nsign; j++) {
+						if (!ispub(pubsym, sign[j].signature, implkind)) {
+							TODO("Is that useful ?");
+							ERR("The public impl <%s> use a non public module <%s>.", identstr(def->ident), identstr(sign[j].signature));
+							return 0;
+						}
+					}
+				}
+				break;
+			}
+			case SDECLMODSKEL:
+			// fallthrough
+			case SMODSKEL:{
+				SModSkel *skel= (SModSkel*) unknown;
+				// verify its signature is public.
+				if (!ispub(pubsym, skel->signature, sigkind)) {
+					ERR("The public impl <%s> implement a non public signature <%s>.", identstr(skel->ident), identstr(skel->signature));
+					return 0;
+				}
+				break;
+			}
+			case SMODSIGN: {
+				SModSign *sign = (SModSign*) unknown;
+				// verify its signatures are public.
+				if (sign->signatures != -1) {
+					SSignatures *signs = (SSignatures*) ftptr(&ftast, sign->signatures);
+					SSignature *sign = (SSignature*) ftptr(&ftast, signs->signs);
+					for (int j = 0; j < signs->nsign; j++) {
+						if (!ispub(pubsym, sign[j].signature, implkind)) {
+							TODO("Is that useful ?");
+							ERR("The public impl <%s> use a non public module <%s>.", identstr(sign->ident), identstr(sign[j].signature));
+							return 0;
+						}
+					}
+				}
+				break;
+			}
+			default: {
+				ERR("Unexpected public statement <%s>.", stmtstrs[*unknown]);
+				return 0;
+			}
+		}
+	}
+	return 1;
+}
+

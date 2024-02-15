@@ -1,0 +1,2 @@
+SFUN(f, {SCALL(TODO)}) : void
+SSTRUCT(Point, x : i32, y : i32)

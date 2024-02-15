@@ -78,6 +78,7 @@ typedef enum {
 	SKELETON,
 	DEFINE,
 	AS,
+	PUB,
 	NKEYWORDS, // must be the last "keyword"
 } ETok;
 

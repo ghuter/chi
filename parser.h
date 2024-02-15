@@ -240,6 +240,11 @@ typedef struct {
 	intptr real;
 } SConv;
 
+typedef struct {
+	EStmt kind;
+	intptr ident;
+} SToplevl;
+
 // -------------------- Expression
 
 typedef enum {
@@ -387,12 +392,17 @@ typedef struct {
 	int nsym;
 } Symbols;
 
+typedef struct {
+	intptr stmts; // [UnknownStmt]
+	int nstmt;
+} StmtArray;
+
 // -------------------- Functions
 
-int parse_toplevel(const ETok *t, intptr *stmt);
+int parse_toplevel(const ETok *t, intptr *stmt, int *pub);
 void printexpr(FILE *fd, intptr expr);
 void printstmt(FILE *fd, intptr stmt);
-int parse_tokens(const ETok *t, Symbols *signatures, Symbols *identsym, Symbols *typesym, Symbols modsym[NMODSYM]);
+int parse_tokens(const ETok *t, Symbols *signatures, Symbols *identsym, Symbols *typesym, Symbols modsym[NMODSYM], StmtArray *pubsym);
 
 
 extern const char *uopstrs[UOP_NUM];

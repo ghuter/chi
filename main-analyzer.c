@@ -63,6 +63,8 @@ Symbols moddef  = {0};
 
 Symbols modsym[NMODSYM] = {0};
 
+StmtArray pubsym = {0};
+
 SymInfo *syminfo = NULL;
 int nsym = 0;
 
@@ -105,6 +107,8 @@ main(int argc, char *argv[])
 		modsym[i].array = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
 	}
 
+	pubsym.stmts = ftalloc(&ftsym, sizeof(intptr) * pagesz);
+
 	// -------------------- Alloc lang types
 	int type = -1;
 	for (unsigned long i = 0; i < NLANGTYPE; i++) {
@@ -138,7 +142,7 @@ main(int argc, char *argv[])
 	// -------------------- Parsing
 	int res = -1;
 
-	res = parse_tokens(tlst, &signatures, &identsym, &typesym, modsym);
+	res = parse_tokens(tlst, &signatures, &identsym, &typesym, modsym, &pubsym);
 	if (res < 0) {
 		ERR("Error when parsing tokens.");
 		return 1;
@@ -195,6 +199,7 @@ main(int argc, char *argv[])
 		assert(analyzefun(NULL, fun, stmt, nsym));
 	}
 
+	assert(analyzepub(&pubsym) == 1);
 	printsymbols(stdout, &typesym);
 	printsymbols(stdout, &identsym);
 	printsymbols(stdout, &funsym);

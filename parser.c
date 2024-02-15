@@ -1308,9 +1308,13 @@ parse_stmts(const ETok *t, intptr *stmtlst, int *nstmt)
 	while (t[i] != RBRACES) {
 		assert(*nstmt < LOCALSZ);
 
-		res = parse_toplevel(t + i, stmts + *nstmt);
+		Bool pub = 0;
+		res = parse_toplevel(t + i, stmts + *nstmt, &pub);
 		if (res < 0) {
 			ERR("Error when parsing the signature.");
+			return -1;
+		} else if (pub) {
+			ERR("Unexepcted <pub> keyword in a module.");
 			return -1;
 		}
 		i += res;
@@ -2435,11 +2439,16 @@ parse_toplevel_import(const ETok *t, intptr *stmt)
 }
 
 int
-parse_toplevel(const ETok *t, intptr *stmt)
+parse_toplevel(const ETok *t, intptr *stmt, Bool *pub)
 {
 	int i = 0;
 	int ident = -1;
 	int res = -1;
+
+	if (t[i] == PUB) {
+		i++;
+		*pub = 1;
+	}
 
 	switch (t[i]) {
 	case IDENTIFIER:
@@ -2484,7 +2493,7 @@ inserttopdcl(Symbols *syms, intptr ident, intptr stmt)
 }
 
 int
-parse_tokens(const ETok *t, Symbols *signatures, Symbols *identsym, Symbols *typesym, Symbols modsym[NMODSYM])
+parse_tokens(const ETok *t, Symbols *signatures, Symbols *identsym, Symbols *typesym, Symbols modsym[NMODSYM], StmtArray *pubsym)
 {
 	int i = 0;
 	int res = -1;
@@ -2492,12 +2501,19 @@ parse_tokens(const ETok *t, Symbols *signatures, Symbols *identsym, Symbols *typ
 
 	while (t[i] != EOI) {
 		int add = 0;
-		res = parse_toplevel(t + i, &stmt);
+		Bool pub = 0;
+		res = parse_toplevel(t + i, &stmt, &pub);
 		if (res < 0) {
 			fprintf(stderr, "Error when parsing toplevel stmt.\n");
 			return 1;
 		}
 		i += res;
+
+		if (pub == 1) {
+			intptr *array = (intptr*) ftptr(&ftsym, pubsym->stmts);
+			array[pubsym->nstmt] = stmt;
+			pubsym->nstmt += 1;
+		}
 
 		UnknownStmt *stmtptr = (UnknownStmt*) ftptr(&ftast, stmt);
 		intptr ident = -1;
