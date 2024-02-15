@@ -13,6 +13,7 @@
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
+#define PTRNIL -1
 
 #define TODO(message)                                                   \
     do {                                                                \
@@ -28,13 +29,13 @@
 #define INFO(...) fprintf(stderr, "INFO(%d): ", __LINE__), fprintf(stderr, __VA_ARGS__), fprintf(stderr, "\n")
 #endif
 
-#define TYPESTR(_type) (_type == -1 ? "?" : (char*) ftptr(&ftident, _type))
+#define TYPESTR(_type) (_type == PTRNIL ? "?" : (char*) ftptr(&ftident, _type))
 #define islangtype(_type) ((typeoffset <= _type) && (_type <= typeend))
 #define identstr(_ident) ((char*) ftptr(&ftident, _ident))
 
 #define getrealtype(_type, _convtab, _nconv, _realtype)  \
 	if (isgeneric(_type)) {                              \
-		assert(_convtab != -1);                          \
+		assert(_convtab != PTRNIL);                          \
 		_realtype = searchreal(_convtab,                 \
 							   _nconv,                   \
 							   _type);                   \
@@ -324,7 +325,7 @@ searchreal(intptr convtab, int nconv, intptr generic)
 {
 	SConv *c = (SConv*) ftptr(&ftast, convtab);
 	if (c == NULL) {
-		return -1;
+		return PTRNIL;
 	}
 
 	for (int i = 0; i < nconv; i++) {
@@ -333,7 +334,7 @@ searchreal(intptr convtab, int nconv, intptr generic)
 		}
 	}
 
-	return -1;
+	return PTRNIL;
 }
 
 static SSign*
@@ -609,7 +610,7 @@ analyzetype(SStruct *stmt)
 Bool
 analyzeglobalcst(SDecl *decl, int nelem)
 {
-	intptr type = -1;
+	intptr type = PTRNIL;
 	int ptrlvl = 0;
 
 	if (!computeconstype(decl->expr, &type, &ptrlvl, decl->type)) {
@@ -617,7 +618,7 @@ analyzeglobalcst(SDecl *decl, int nelem)
 		return 0;
 	}
 
-	if (decl->type != -1 && (type != decl->type || ptrlvl != decl->ptrlvl)) {
+	if (decl->type != PTRNIL && (type != decl->type || ptrlvl != decl->ptrlvl)) {
 		ERR("The type provided by the user doesn't match the computed one.");
 		ERR("<%s  ptrlvl(%d)> != <%s ptrlvl(%d)>", identstr(decl->type), decl->ptrlvl, identstr(type), ptrlvl);
 		return 0;
@@ -637,10 +638,10 @@ analyzeglobalcst(SDecl *decl, int nelem)
 static Bool
 analyzebinop(AnalyzeCtx *ctx, EBinop *binop, intptr *type, int *ptrlvl, intptr typeinfo, int nsym)
 {
-	intptr type1 = -1;
+	intptr type1 = PTRNIL;
 	int ptrlvl1 = 0;
 
-	intptr type2 = -1;
+	intptr type2 = PTRNIL;
 	int ptrlvl2 = 0;
 
 	switch (binop->op) {
@@ -690,12 +691,12 @@ analyzebinop(AnalyzeCtx *ctx, EBinop *binop, intptr *type, int *ptrlvl, intptr t
 	case OP_BNOT:
 	case OP_LNOT:
 		INFO("compare ops");
-		if (!analyzefunexpr(ctx, binop->left, &type1, &ptrlvl1, -1, nsym)) {
+		if (!analyzefunexpr(ctx, binop->left, &type1, &ptrlvl1, PTRNIL, nsym)) {
 			ERR("Error when computing the type of a const declaration binop.");
 			return 0;
 		}
 
-		if (!analyzefunexpr(ctx, binop->right, &type2, &ptrlvl2, -1, nsym)) {
+		if (!analyzefunexpr(ctx, binop->right, &type2, &ptrlvl2, PTRNIL, nsym)) {
 			ERR("Error when computing the type of a const declaration binop.");
 			return 0;
 		}
@@ -961,11 +962,11 @@ analyzesignparams(AnalyzeCtx *ctx, intptr callparams, int ncallparam, intptr ide
 
 	assert(ncallparam == fun->nparam);
 	for (int i = 0; i < ncallparam; i++) {
-		intptr realtype = -1;
+		intptr realtype = PTRNIL;
 		getrealtype(params[i].type, convtab, nconv, realtype);
 		assert(realtype > 0);
 
-		intptr type = -1;
+		intptr type = PTRNIL;
 		int ptrlvl = 0;
 		if (!analyzefunexpr(ctx, exprs[i], &type, &ptrlvl, realtype, nsym)) {
 			ERR("Error when parsing the expression in a fun call expression.");
@@ -987,7 +988,7 @@ analyzesignparams(AnalyzeCtx *ctx, intptr callparams, int ncallparam, intptr ide
 static Bool
 analyzesignreturn(ECall *call, Mem *expr, SSign *fun, intptr convtab, int nconv, intptr *type, int *ptrlvl)
 {
-	intptr realtype = -1;
+	intptr realtype = PTRNIL;
 	getrealtype(fun->type, convtab, nconv, realtype);
 	assert(realtype > 0);
 
@@ -1017,7 +1018,7 @@ convgen(SGenerics *from, SGenerics *to, intptr type)
 	}
 
 	assert("Unreachable");
-	return -1;
+	return PTRNIL;
 }
 static Bool
 analyzeskelreturn(ECall *call, Mem *expr, SSign *fun, SGenerics *skelgen, SGenerics *signgen, intptr *type, int *ptrlvl)
@@ -1053,7 +1054,7 @@ analyzeskelparams(AnalyzeCtx *ctx, intptr callparams, int ncallparam, intptr ide
 			realtype = convgen(signgen, skelgen, realtype);	
 		}
 
-		intptr type = -1;
+		intptr type = PTRNIL;
 		int ptrlvl = 0;
 		if (!analyzefunexpr(ctx, exprs[i], &type, &ptrlvl, realtype, nsym)) {
 			ERR("Error when parsing the expression in a fun call expression.");
@@ -1097,14 +1098,14 @@ searchimplcall(AnalyzeCtx *ctx, intptr identfun, intptr identmod, intptr *convta
 
 	// search among the module params of the impl.
 	intptr modules = ctx->impl->modules;
-	if (modules == -1) {
+	if (modules == PTRNIL) {
 		ERR("Calling a function from the module <%s> which is not declared in the impl <%s>.", identstr(identmod), identstr(ctx->impl->ident));
 		return 0;
 	}
 
 	SSignatures *s = (SSignatures*) ftptr(&ftast, modules);
 	SSignature *signs = (SSignature*) ftptr(&ftast, s->signs);
-	intptr isign = -1;
+	intptr isign = PTRNIL;
 	for (int i = 0; i < s->nsign; i++) {
 		if (signs[i].ident == identmod) {
 			isign = signs[i].signature;
@@ -1112,7 +1113,7 @@ searchimplcall(AnalyzeCtx *ctx, intptr identfun, intptr identmod, intptr *convta
 		}
 	}
 
-	if (isign == -1) {
+	if (isign == PTRNIL) {
 		ERR("Calling a function from the signatures <%s> which is not declared in the impl <%s>.", identstr(identmod), identstr(ctx->impl->ident));
 		return 0;
 	}
@@ -1170,7 +1171,7 @@ searchskelcall(AnalyzeCtx *ctx, intptr identfun, intptr identmod, SGenerics **sk
 {
 	// does the skel has signatures
 	intptr signatures = ctx->sign->signatures;
-	if (signatures == -1) {
+	if (signatures == PTRNIL) {
 		ERR("Calling a function from the signatures <%s> which is not declared in the signatures <%s>.", identstr(identmod), identstr(ctx->sign->ident));
 		return 0;
 	}
@@ -1238,7 +1239,7 @@ analyzemodcall(AnalyzeCtx *ctx, EAccess *a, ECall *call, intptr *type, int *ptrl
 			return analyzeskelcall(ctx, call, expr, fun, skelgen, signgen, nsym, type, ptrlvl);
 		}
 		else {
-			intptr convtab = -1;
+			intptr convtab = PTRNIL;
 			int nconv = 0;
 
 			SSign *fun = searchimplcall(ctx, a->ident, expr->addr, &convtab, &nconv);
@@ -1251,7 +1252,7 @@ analyzemodcall(AnalyzeCtx *ctx, EAccess *a, ECall *call, intptr *type, int *ptrl
 		}
 	}
 
-	intptr convtab = -1;
+	intptr convtab = PTRNIL;
 	int nconv = 0;
 
 	SFun *fun = searchtopcall(a->ident, expr->addr, &convtab, &nconv);
@@ -1288,7 +1289,7 @@ analyzestmtmodcall(AnalyzeCtx *ctx, SAccessMod *a, int nsym)
 			return analyzeskelparams(ctx, call->params, call->nparam, a->mod, fun, skelgen, signgen, nsym);
 		}
 		else {
-			intptr convtab = -1;
+			intptr convtab = PTRNIL;
 			int nconv = 0;
 
 			SSign *fun = searchimplcall(ctx, call->ident, a->mod, &convtab, &nconv);
@@ -1300,7 +1301,7 @@ analyzestmtmodcall(AnalyzeCtx *ctx, SAccessMod *a, int nsym)
 		}
 	}
 
-	intptr convtab = -1;
+	intptr convtab = PTRNIL;
 	int nconv = 0;
 
 	SFun *fun = searchtopcall(call->ident, a->mod, &convtab, &nconv);
@@ -1370,10 +1371,10 @@ analyzeaccess(AnalyzeCtx *ctx, EAccess *ac, intptr *type, int *ptrlvl, int nsym)
 	INFO("analyzeaccess");
 	Bool res = 0;
 
-	intptr structtype = -1;
+	intptr structtype = PTRNIL;
 	int structptrlvl = 0;
 
-	res = analyzefunexpr(ctx, ac->expr, &structtype, &structptrlvl, -1, nsym);
+	res = analyzefunexpr(ctx, ac->expr, &structtype, &structptrlvl, PTRNIL, nsym);
 	if (res == 0) {
 		ERR("Error when analyzefunexpr.");
 		return 0;
@@ -1498,6 +1499,35 @@ analyzefunexpr(AnalyzeCtx *ctx, intptr expr, intptr *type, int *ptrlvl, intptr t
 		EAccess *ac = (EAccess*) unknown;
 		return analyzeaccess(ctx, ac, type, ptrlvl, nsym);
 	}
+	case ECAST: {
+		ECast *c = (ECast*) unknown;
+
+		intptr ctype = PTRNIL;
+		int cptrlvl = 0;
+		if (!analyzefunexpr(ctx, c->expr, &ctype, &cptrlvl, PTRNIL, nsym)) {
+			ERR("Error when analyzing the expression of an <%s>.", exprstrs[*unknown]);
+			return 0;
+		}
+
+		if (!islangtype(ctype) && cptrlvl < 1) {
+			ERR("Impossible to cast a non scalare type <%s>.", identstr(ctype));
+			return 0;
+		}
+
+		if (!islangtype(c->type) && c->ptrlvl < 1) {
+			ERR("Impossible to cast <%s> to a non scalare type <%s>.", identstr(ctype), identstr(c->type));
+			return 0;
+		}
+
+		if ((cptrlvl < 1 || c->ptrlvl < 1) && cptrlvl != c->ptrlvl) {
+			ERR("Impossible to cast a <%s: ptrlvl(%d)> into <%s: ptrlvl(%d)>.", identstr(ctype), cptrlvl, identstr(c->type), c->ptrlvl);
+			return 0;
+		}
+
+		*type = c->type;
+		*ptrlvl = c->ptrlvl;
+		return 1;
+	}
 
 	default:
 		ERR("Unexpected statement <%s> in a toplevel declaration.", exprstrs[*unknown]);
@@ -1563,7 +1593,7 @@ analyzefunstmt(AnalyzeCtx *ctx, const SFun *fun, int *nsym, int block, intptr st
 		int ptrlvl;
 
 		SIf* _if = (SIf*)unknown;
-		if (!analyzefunexpr(ctx, _if->cond, &type, &ptrlvl, -1, *nsym)) {
+		if (!analyzefunexpr(ctx, _if->cond, &type, &ptrlvl, PTRNIL, *nsym)) {
 			ERR("Error when analyzing the condition of a if.");
 			return 0;
 		}
@@ -1580,7 +1610,7 @@ analyzefunstmt(AnalyzeCtx *ctx, const SFun *fun, int *nsym, int block, intptr st
 		}
 
 		newnsym = *nsym;
-		if (_if->elsestmt != -1 && !analyzefunstmt(ctx, fun, &newnsym, newnsym, _if->elsestmt)) {
+		if (_if->elsestmt != PTRNIL && !analyzefunstmt(ctx, fun, &newnsym, newnsym, _if->elsestmt)) {
 			ERR("Error when analyzing the else stmt of a if.");
 			return 0;
 		}
@@ -1589,8 +1619,8 @@ analyzefunstmt(AnalyzeCtx *ctx, const SFun *fun, int *nsym, int block, intptr st
 	case SRETURN: {
 		INFO("SRETURN");
 		SReturn *ret = (SReturn*) unknown;
-		intptr type = -1;
-		int ptrlvl = -1;
+		intptr type = PTRNIL;
+		int ptrlvl = PTRNIL;
 
 		if (!analyzefunexpr(ctx, ret->expr, &type, &ptrlvl, fun->type, *nsym)) {
 			ERR("Error when analyzing the return statement.");
@@ -1626,7 +1656,7 @@ analyzefunstmt(AnalyzeCtx *ctx, const SFun *fun, int *nsym, int block, intptr st
 			return 0;
 		}
 
-		if (!analyzefunexpr(ctx, f->expr, &type, &ptrlvl, -1, newnsym)) {
+		if (!analyzefunexpr(ctx, f->expr, &type, &ptrlvl, PTRNIL, newnsym)) {
 			ERR("Error when analyzing the condition of a if.");
 			return 0;
 		}
@@ -1698,8 +1728,8 @@ analyzefunstmt(AnalyzeCtx *ctx, const SFun *fun, int *nsym, int block, intptr st
 			return 0;
 		}
 
-		intptr type = -1;
-		int ptrlvl = -1;
+		intptr type = PTRNIL;
+		int ptrlvl = PTRNIL;
 		if (!analyzefunexpr(ctx, a->expr, &type, &ptrlvl, sym->type, *nsym)) {
 			ERR("Error when parsing the expression in an assign.");
 			return 0;
@@ -1722,15 +1752,15 @@ analyzefunstmt(AnalyzeCtx *ctx, const SFun *fun, int *nsym, int block, intptr st
 			return 0;
 		}
 
-		intptr ltype = -1;
-		int lptrlvl = -1;
-		if (!analyzefunexpr(ctx, a->left, &ltype, &lptrlvl, -1, *nsym)) {
+		intptr ltype = PTRNIL;
+		int lptrlvl = PTRNIL;
+		if (!analyzefunexpr(ctx, a->left, &ltype, &lptrlvl, PTRNIL, *nsym)) {
 			ERR("Error when parsing the expression in an assign.");
 			return 0;
 		}
 
-		intptr rtype = -1;
-		int rptrlvl = -1;
+		intptr rtype = PTRNIL;
+		int rptrlvl = PTRNIL;
 		if (!analyzefunexpr(ctx, a->right, &rtype, &rptrlvl, ltype, *nsym)) {
 			ERR("Error when parsing the expression in an assign.");
 			return 0;
@@ -1889,7 +1919,7 @@ sign_is_generic_defined(SGenerics *g1, SSignature *s)
 	}
 
 	// Verify if the generics of the signatures are declared.
-	if (s->generics != -1) {
+	if (s->generics != PTRNIL) {
 		SGenerics *g2 = (SGenerics*) ftptr(&ftast, s->generics);
 		if (!g1containsg2(g1, g2)) {
 			ERR("The signature %s use a non defined generic.", identstr(s->signature));
@@ -1905,7 +1935,7 @@ sign_are_generics_defined(intptr generics, intptr signatures)
 {
 	// No generics
 	SGenerics *g = NULL;
-	if (generics != -1) {
+	if (generics != PTRNIL) {
 		g = (SGenerics*) ftptr(&ftast, generics);
 
 		// Verify generic names
@@ -1919,7 +1949,7 @@ sign_are_generics_defined(intptr generics, intptr signatures)
 	}
 
 	// No signatures
-	if (signatures == -1) {
+	if (signatures == PTRNIL) {
 		return 1;
 	}
 
@@ -1984,7 +2014,7 @@ sign_analyze_stmt(SModSign *sign, SGenerics *g, intptr stmt)
 	case SSIGN: {
 		SSign *s = (SSign*) unknown;
 		// Verify return type
-		if (s->type != -1 && !sign_is_type_exist(sign, g, s->type, s->ptrlvl, 1)) {
+		if (s->type != PTRNIL && !sign_is_type_exist(sign, g, s->type, s->ptrlvl, 1)) {
 			ERR("Using an undefined type <%s>.", identstr(s->type));
 			ERR("In the fun <%s>.", identstr(s->ident));
 			return 0;
@@ -2025,7 +2055,7 @@ analyzemodsign(SModSign *sign)
 	intptr* stmt = (intptr*) ftptr(&ftast, sign->stmts);
 	for (int i = 0; i < sign->nstmt; i++) {
 		SGenerics *g = NULL;
-		if (sign->generics != -1) {
+		if (sign->generics != PTRNIL) {
 			g = (SGenerics*) ftptr(&ftast, sign->generics);
 		}
 
@@ -2080,11 +2110,11 @@ impl_verify_generics(intptr ident, intptr generics, intptr *convtab, int *nconv,
 	SGenerics *g1 = NULL;
 	SGenerics *g2 = NULL;
 
-	if (generics != -1) {
+	if (generics != PTRNIL) {
 		g1 = (SGenerics*) ftptr(&ftast, generics);
 	}
 
-	if (sign->generics != -1) {
+	if (sign->generics != PTRNIL) {
 		g2 = (SGenerics*) ftptr(&ftast, sign->generics);
 	}
 
@@ -2130,11 +2160,11 @@ impl_verify_module(intptr ident, intptr modules, intptr convtab, int nconv, SMod
 	SSignatures *s1 = NULL;
 	SSignatures *s2 = NULL;
 
-	if (modules != -1) {
+	if (modules != PTRNIL) {
 		s1 = (SSignatures*) ftptr(&ftast, modules);
 	}
 
-	if (sign->signatures != -1) {
+	if (sign->signatures != PTRNIL) {
 		s2 = (SSignatures*) ftptr(&ftast, sign->signatures);
 	}
 
@@ -2158,8 +2188,8 @@ impl_verify_module(intptr ident, intptr modules, intptr convtab, int nconv, SMod
 				return 0;
 			}
 
-			intptr mgen = -1;
-			intptr msign = -1;
+			intptr mgen = PTRNIL;
+			intptr msign = PTRNIL;
 			// search module...
 			if (!getmodinfo(ss1[i].signature, &mgen, &msign)) {
 				ERR("Implementing <%s> with the undefined module <%s>.", identstr(ident), identstr(ss1[i].signature));
@@ -2174,12 +2204,12 @@ impl_verify_module(intptr ident, intptr modules, intptr convtab, int nconv, SMod
 
 			// verify module generics
 			SGenerics *ss2gen = NULL;
-			if (ss2[i].generics != -1) {
+			if (ss2[i].generics != PTRNIL) {
 				ss2gen = (SGenerics*) ftptr(&ftast, ss2[i].generics);
 			}
 
 			SGenerics *mgengen = NULL;
-			if (mgen != -1) {
+			if (mgen != PTRNIL) {
 				mgengen = (SGenerics*) ftptr(&ftast, mgen);
 			}
 
@@ -2216,7 +2246,7 @@ impl_verify_funsig(intptr convtab, int nconv, SFun *impl, SSign *sign, int *loca
 		return 0;
 	}
 
-	int signtype = -1;
+	int signtype = PTRNIL;
 	getrealtype(sign->type, convtab, nconv, signtype);
 	assert(signtype > 0 && "Unreachable assert.");
 
@@ -2240,7 +2270,7 @@ impl_verify_funsig(intptr convtab, int nconv, SFun *impl, SSign *sign, int *loca
 			return 0;
 		}
 
-		int signtype = -1;
+		int signtype = PTRNIL;
 		getrealtype((m2[i].type), convtab, nconv, signtype);
 		assert(signtype > 0 && "Unreachable assert.");
 		if (signtype != m1[i].type || m1[i].ptrlvl != m2[i].ptrlvl) {

@@ -256,6 +256,7 @@ typedef enum {
 	EACCESS,
 	ESUBSCR,
 	ESTRUCT,
+	ECAST,
 	NEXPR,
 } EExpr;
 
@@ -366,6 +367,13 @@ typedef struct {
 	int nelem;
 	intptr elems; // EElem*
 } EStruct;
+
+typedef struct {
+	EExpr kind;
+	intptr expr; // UnknownExpr*
+	intptr type;
+	int ptrlvl;
+} ECast;
 
 // Symbols
 

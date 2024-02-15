@@ -132,6 +132,7 @@ const char *exprstrs[NEXPR] = {
 	[EACCESS] = "EACCESS",
 	[ESUBSCR] = "ESUBSCR",
 	[ESTRUCT] = "ESTRUCT",
+	[ECAST]   = "ECAST",
 };
 
 const char *opstrs[OP_NUM] = {
@@ -599,6 +600,14 @@ printexpr(FILE* fd, intptr expr)
 			elem++;
 		}
 		fprintf(fd, "})");
+		return;
+	}
+	case ECAST: {
+		ECast *c = (ECast*) ptr;
+		fprintf(fd, "%s(", exprstrs[*ptr]);
+		printexpr(fd, c->expr);
+		fprintf(fd, " as ");
+		printtype(fd, c->type, c->ptrlvl);
 		return;
 	}
 	default:
@@ -2096,6 +2105,31 @@ parse_otherop(const ETok *t, const ETok *eoe, intptr *expr)
 			return -1;
 		}
 		i += res;
+		return i;
+	}
+	case AS: {
+		i++;
+		intptr type = -1;
+		int ptrlvl = 0;
+
+		PTRLVL(t, i, type, ptrlvl);
+		if (type == -1) {
+			if (t[i] != IDENTIFIER) {
+				ERR("Error when parsing the type after an <AS>.");
+				return -1;
+			}
+			i++;
+			type = t[i];
+			i++;
+		}
+
+		*expr = ftalloc(&ftast, sizeof(ECast));
+		ECast* c = (ECast*) ftptr(&ftast, *expr);
+		c->kind = ECAST;
+		c->expr = addr;
+		c->type = type;
+		c->ptrlvl = ptrlvl;
+
 		return i;
 	}
 	default:

@@ -17,6 +17,7 @@ char *keywords[NKEYWORDS] = {
 	[SIGNATURE] = "signature",
 	[SKELETON]  = "skeleton",
 	[DEFINE]    = "define",
+	[AS]        = "as",
 };
 
 char *tokenstrs[NKEYWORDS] = {
@@ -37,6 +38,7 @@ char *tokenstrs[NKEYWORDS] = {
 	[SIGNATURE]     = "SIGNATURE",
 	[SKELETON]      = "SKELETON",
 	[DEFINE]        = "DEFINE",
+	[AS]            = "AS",
 
 	[INT]           = "INT",
 	[FLOAT]         = "FLOAT",

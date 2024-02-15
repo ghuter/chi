@@ -1,0 +1,2 @@
+SSTRUCT(Point, x : i32, y : i32)
+SFUN(f, {SSEQ(const SDECL(p, ESTRUCT(Point { <x : ECSTI(0)> <y : ECSTI(0)> })) : Point, SSEQ(const SDECL(ptr, ECAST(EUNOP(AT, EMEM(p) : Point) : ^Point as ^u64) : ^u64, SSEQ(const SDECL(x, ECSTI(10)) : i32, const SDECL(y, ECAST(EMEM(x) : i32 as i8) : i8)))}) : void

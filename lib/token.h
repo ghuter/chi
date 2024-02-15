@@ -77,6 +77,7 @@ typedef enum {
 	SIGNATURE,
 	SKELETON,
 	DEFINE,
+	AS,
 	NKEYWORDS, // must be the last "keyword"
 } ETok;
 
