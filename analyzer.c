@@ -2512,7 +2512,7 @@ analyzemoddef(SModDef *def)
 	return 1;
 }
 
-static Bool
+Bool
 ispub(const StmtArray *pubsym, const intptr ident, const EStmt *kind)
 {
 	intptr *array = (intptr*) ftptr(&ftsym, pubsym->stmts);
