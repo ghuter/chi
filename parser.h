@@ -50,129 +50,129 @@ typedef EStmt UnknownStmt;
 
 typedef struct {
 	EStmt kind;
-	intptr ident;
-	intptr type;
+	intptr ident; // ftident -> char*
+	intptr type;  // ftident -> char*
 	int ptrlvl;
 	Bool cst;
-	intptr expr;
+	intptr expr; // ftast -> UnknownExpr*
 } SDecl;
 
 typedef struct {
-	intptr ident;
-	intptr type;
+	intptr ident; // ftident -> char*
+	intptr type; // ftident -> char*
 	int ptrlvl;
 } SMember;
 
 typedef struct {
 	EStmt kind;
-	intptr stmt;
+	intptr stmt; // ftast -> UnknownStmt*
 } SBlock;
 
 typedef struct {
 	EStmt kind;
-	intptr ident;
+	intptr ident; // ftident -> char*
 	int nmember;
-	intptr members; // (SMember*)
+	intptr members; // ftast -> SMember*
 } SStruct;
 
 typedef struct {
 	EStmt kind;
-	intptr ident;
-	intptr type; // Return type
+	intptr ident; // ftident -> char*
+	intptr type; // ftident -> char*
 	int ptrlvl;
 	int nparam;
-	intptr params; // (SMember*)
-	intptr stmt;
+	intptr params; // ftast -> SMember*
+	intptr stmt; // ftast -> UnknownStmt*
 } SFun;
 typedef SFun SSign;
 
 typedef struct {
 	EStmt kind;
-	intptr ident;
-	intptr expr;
+	intptr ident; // ftident -> char*
+	intptr expr; // ftast -> UnknownExpr*
 } SAssign;
 
 typedef struct {
 	EStmt kind;
-	intptr expr;
+	intptr expr; // ftast -> UnknownExpr*
 } SReturn;
 
 typedef struct {
 	EStmt kind;
-	intptr cond;     // UnknownExpr*
-	intptr ifstmt;   // UnknownStmt*
-	intptr elsestmt; // UnknownStmt*
+	intptr cond;     // ftast -> UnknownExpr*
+	intptr ifstmt;   // ftast -> UnknownStmt*
+	intptr elsestmt; // ftast -> UnknownStmt*
 } SIf;
 
 typedef struct {
 	EStmt kind;
-	intptr stmt; // UnknownStmt*
-	intptr nxt;  // UnknownStmt*
+	intptr stmt; // ftast -> UnknownStmt*
+	intptr nxt;  // ftast -> UnknownStmt*
 } SSeq;
 
 typedef struct {
 	EStmt kind;
-	intptr stmt1;   // UnknownStmt*
-	intptr expr;    // UnknownExpr*
-	intptr stmt2;   // UnknownStmt*
-	intptr forstmt; // UnknownStmt*
+	intptr stmt1;   // ftast -> UnknownStmt*
+	intptr expr;    // ftast -> UnknownExpr*
+	intptr stmt2;   // ftast -> UnknownStmt*
+	intptr forstmt; // ftast -> UnknownStmt*
 } SFor;
 
 typedef struct {
 	EStmt kind;
-	intptr ident;
+	intptr ident; // ftident -> char*
 	int nparam;
-	intptr params; // [Expr*]
+	intptr params; // ftast -> [UnknownExpr]
 } SCall;
 
 typedef struct {
 	EStmt kind;
-	intptr mod;
-	intptr stmt; // UnknownStmt*
+	intptr mod; // ftident -> char*
+	intptr stmt; // ftast -> UnknownStmt*
 } SAccessMod;
 
 typedef struct {
 	EStmt kind;
-	intptr left;  // UnknownExpr*
-	intptr right; // UnknownExpr*
+	intptr left;  // ftast -> UnknownExpr*
+	intptr right; // ftast -> UnknownExpr*
 } SExprAssign;
 
 typedef struct {
 	EStmt kind;
-	intptr ident;
+	intptr ident; // ftident -> char*
 } SImport;
 
 typedef struct {
 	EStmt kind;
 
 	// Impl name:
-	intptr ident;
+	intptr ident; // ftident -> char*
 
 	// Generic params:
-	intptr generics;
+	intptr generics; // ftast -> SGenerics*
 
 	// Module params:
-	intptr signatures;
+	intptr signatures; // ftast -> SSignatures*
 
 	// Stmts (signature / structs)
 	int nstmt;
-	intptr stmts; // [UnknownStmt]
+	intptr stmts; // ftast -> [UnknownStmt]
 } SModSign;
 
 typedef struct {
 	EStmt kind;
 
 	// Impl name:
-	intptr ident;
+	intptr ident; // ftident -> char*
 
 	// Impl what:
-	intptr signature;
+	intptr signature; // ftident -> char*
 
 	// Generic params:
-	intptr generics;
+	intptr generics; // ftast -> SGenerics*
 
 	// Module params:
-	intptr modules;
+	intptr modules; // ftast -> SSignatures*
 
 	// Conv table:
 	intptr convtab; // [SConv]
@@ -180,7 +180,7 @@ typedef struct {
 
 	// Stmts:
 	int nstmt;
-	intptr stmts; // [UnknownStmt]
+	intptr stmts; // ftast -> [UnknownStmt]
 } SModImpl;
 
 typedef SModImpl SDeclModImpl;
@@ -188,14 +188,14 @@ typedef SModImpl SDeclModImpl;
 typedef struct {
 	EStmt kind;
 	// Impl name:
-	intptr ident;
+	intptr ident; // ftident -> char*
 
 	// Impl what:
-	intptr signature;
+	intptr signature; // ftident -> char*
 
 	// Stmts
 	int nstmt;
-	intptr stmts;
+	intptr stmts; // ftast -> [UnknownStmt]
 } SModSkel;
 
 typedef SModSkel SDeclModSkel;
@@ -203,31 +203,31 @@ typedef SModSkel SDeclModSkel;
 typedef struct {
 	EStmt kind;
 	// Impl name:
-	intptr ident;
+	intptr ident; // ftident -> char*
 
 	// Generic params:
-	intptr generics;
+	intptr generics; // ftast -> SGenerics*
 
 	// Module params:
-	intptr modules;
+	intptr modules; // ftast -> SSignatures*
 
 	// Conv table:
-	intptr convtab; // [SConv]
+	intptr convtab; // ftast -> [SConv]
 	int nconv;
 
 	// Impl what:
-	intptr skeleton;
+	intptr skeleton; // ftident -> char*
 } SModDef;
 
 typedef struct {
 	int ngen;
-	intptr generics; // intptr *ident;
+	intptr generics; // ftast -> [intptr]
 } SGenerics;
 
 typedef struct {
-	intptr ident;
-	intptr signature;
-	intptr generics; // *SGenerics
+	intptr ident; // ftident -> char*
+	intptr signature; // ftident -> char*
+	intptr generics; // ftast -> *SGenerics
 } SSignature;
 
 typedef struct {
@@ -236,13 +236,13 @@ typedef struct {
 } SSignatures;
 
 typedef struct {
-	intptr gen;
-	intptr real;
+	intptr gen; // ftident -> char*
+	intptr real; // ftident -> char*
 } SConv;
 
 typedef struct {
 	EStmt kind;
-	intptr ident;
+	intptr ident; // ftident -> char*
 } SToplevl;
 
 // -------------------- Expression
@@ -312,79 +312,79 @@ typedef Csti Csts;
 
 typedef struct {
 	EExpr  kind;
-	intptr addr;
-	intptr type;
+	intptr addr; // ftast -> UnknownExpr*
+	intptr type; // ftident -> char*
 	int    ptrlvl;
 } Mem;
 
 typedef struct {
 	EExpr  kind;
 	Op     op;
-	intptr left;
-	intptr right;
-	intptr type;
+	intptr left; // ftast -> UnknownExpr*
+	intptr right; // ftast -> UnknownExpr*
+	intptr type; // ftident -> char*
 	int    ptrlvl;
 } EBinop;
 
 typedef struct {
 	EExpr  kind;
 	Uop    op;
-	intptr expr;
-	intptr type;
+	intptr expr; // ftast -> UnknownExpr*
+	intptr type; // ftident -> char*
 	int    ptrlvl;
 } EUnop;
 
 typedef struct {
 	EExpr  kind;
-	intptr expr;
+	intptr expr; // ftast -> UnknownExpr*
 	int    nparam;
-	intptr params; // [Expr*]
-	intptr type;
+	intptr params; // ftast -> [UnknownExpr]
+	intptr type; // ftident -> char*
 	int    ptrlvl;
 } ECall;
 
 typedef struct {
 	EExpr  kind;
-	intptr expr;
-	intptr ident;
-	intptr type;
+	intptr expr; // ftast -> UnknownExpr*
+	intptr ident; // ftident -> char*
+	intptr type; // ftident -> char*
 	int    ptrlvl;
 } EAccess;
 
 typedef struct {
 	EExpr  kind;
-	intptr expr;
-	intptr idxexpr;
-	intptr type;
+	intptr expr; // ftast -> UnknownExpr*
+	intptr idxexpr; // ftast -> UnknownExpr*
+	intptr type; // ftident -> char*
 	int    ptrlvl;
 } ESubscr;
 
 typedef struct {
-	intptr ident;
-	intptr expr;
-	intptr type;
+	intptr ident; // ftident -> char*
+	intptr expr; // ftast -> UnknownExpr*
+	intptr type; // ftident -> char*
 	int    ptrlvl;
 } EElem;
 
 typedef struct {
 	EExpr kind;
-	intptr ident;
+	intptr ident; // ftident -> char*
 	int nelem;
-	intptr elems; // EElem*
+	intptr elems; // ftast -> [EElem]
 } EStruct;
 
 typedef struct {
 	EExpr kind;
-	intptr expr; // UnknownExpr*
-	intptr type;
+	intptr expr; // ftast -> UnknownExpr*
+	intptr type; // ftident -> char*
 	int ptrlvl;
 } ECast;
 
 // Symbols
 
 typedef struct {
-	intptr ident; // Char*
-	intptr stmt; // UnknownStmt*
+	intptr ident; // ftident -> char*
+	intptr stmt; // ftast -> UnknownStmt*
 } Symbol;
 
 typedef struct {
