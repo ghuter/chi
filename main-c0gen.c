@@ -53,12 +53,23 @@ FatArena ftast   = {0};
 FatArena ftsym   = {0};
 FatArena ftcode  = {0};
 
-Symbols funsym = {0};
-Symbols identsym = {0};
-Symbols typesym = {0};
-Symbols signatures = {0};
+Symbols funsym       = {0};
+Symbols identsym     = {0};
+Symbols typesym      = {0};
+Symbols signatures   = {0};
+Symbols genstructsym = {0};
+
+Symbols modsign = {0};
+Symbols modskul = {0};
+Symbols modimpl = {0};
+Symbols moddef  = {0};
+
+Symbols modsym[NMODSYM] = {0};
+
+StmtArray pubsym = {0};
 
 SymInfo *syminfo = NULL;
+int nsym = 0;
 
 int fstlangtype = -1;
 int lstlangtype = -1;
@@ -71,30 +82,37 @@ main(int argc, char *argv[])
 	(void) argc;
 	(void) argv;
 
-	POK(ftnew(&ftident, 1000000) != 0, "fail to create a FatArena");
-	ftalloc(&ftident, NKEYWORDS + 1);// burn significant int
-
-	POK(ftnew(&ftimmed, 1000000) != 0, "fail to create a FatArena");
-	ftalloc(&ftimmed, NKEYWORDS + 1);// burn significant int
-
-	POK(ftnew(&ftlit, 1000000) != 0, "fail to create a FatArena");
-	ftalloc(&ftlit, NKEYWORDS + 1);// burn significant int
-
-	POK(ftnew(&fttok, 1000000) != 0, "fail to create a FatArena");
-	int ntok = 0;
-
-	POK(ftnew(&fttmp, 1000000) != 0, "fail to create a FatArena");
-	POK(ftnew(&ftast, 1000000) != 0, "fail to create a FatArena");
-	POK(ftnew(&ftsym, 4000000) != 0, "fail to create a FatArena");
-
-	POK(ftnew(&ftcode, 1000000) != 0, "fail to create a FatArena");
-
 	int pagesz = getpgsz();
 
-	identsym.array = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
-	funsym.array   = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
-	typesym.array  = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
-	signatures.array = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	POK(ftnew(&ftident, 10 * pagesz) != 0, "fail to create a FatArena");
+	ftalloc(&ftident, NKEYWORDS + 1);// burn significant int
+
+	POK(ftnew(&ftimmed, 10 * pagesz) != 0, "fail to create a FatArena");
+	ftalloc(&ftimmed, NKEYWORDS + 1);// burn significant int
+
+	POK(ftnew(&ftlit, 10 * pagesz) != 0, "fail to create a FatArena");
+	ftalloc(&ftlit, NKEYWORDS + 1);// burn significant int
+
+	POK(ftnew(&fttok, 10 * pagesz) != 0, "fail to create a FatArena");
+	int ntok = 0;
+
+	POK(ftnew(&fttmp, 10 * pagesz) != 0, "fail to create a FatArena");
+	POK(ftnew(&ftast, 10 * pagesz) != 0, "fail to create a FatArena");
+	POK(ftnew(&ftsym, 100 * pagesz) != 0, "fail to create a FatArena");
+
+	POK(ftnew(&ftcode, 100 * pagesz) != 0, "fail to create a FatArena");
+
+	identsym.array     = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	funsym.array       = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	typesym.array      = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	signatures.array   = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	genstructsym.array = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+
+	for (int i = 0; i < NMODSYM; i++) {
+		modsym[i].array = ftalloc(&ftsym, sizeof(Symbol) * pagesz);
+	}
+
+	pubsym.stmts = ftalloc(&ftsym, sizeof(intptr) * pagesz);
 
 	// -------------------- Alloc lang types
 	int type = -1;
@@ -127,7 +145,7 @@ main(int argc, char *argv[])
 
 	// -------------------- Parsing
 	int res = -1;
-	res = parse_tokens(tlst, &signatures, &identsym, &typesym);
+	res = parse_tokens(tlst, &signatures, &identsym, &typesym, modsym, &pubsym);
 	if (res < 0) {
 		ERR("Error when parsing tokens.");
 		return 1;
@@ -136,7 +154,7 @@ main(int argc, char *argv[])
 	// -------------------- Analyzing
 	intptr info = ftalloc(&ftsym, sizeof(SymInfo) * pagesz);
 	syminfo = (SymInfo*) ftptr(&ftsym, info);
-	int nsym = 0;
+	nsym = 0;
 
 	Symbol *sym = (Symbol*) ftptr(&ftsym, typesym.array);
 	for (int i = 0; i < typesym.nsym; i++) {
@@ -150,26 +168,54 @@ main(int argc, char *argv[])
 		assert(analyzeglobalcst(decl, nsym));
 		nsym++;
 	}
-	/* printsymbolsinfo(nsym); */
+	/* printsymbolsinfo(stdout, nsym); */
+
+	Symbol *symsign = (Symbol*) ftptr(&ftsym, modsym[MODSIGN].array);
+	for (int i = 0; i < modsym[MODSIGN].nsym; i++) {
+		SModSign *s = (SModSign*) ftptr(&ftast, symsign[i].stmt);
+		analyzemodsign(s);
+	}
+
+	Symbol *symimpl = (Symbol*) ftptr(&ftsym, modsym[MODIMPL].array);
+	for (int i = 0; i < modsym[MODIMPL].nsym; i++) {
+		SModImpl *s = (SModImpl*) ftptr(&ftast, symimpl[i].stmt);
+		analyzemodimpl(s);
+	}
+
+	Symbol *symskel = (Symbol*) ftptr(&ftsym, modsym[MODSKEL].array);
+	for (int i = 0; i < modsym[MODSKEL].nsym; i++) {
+		SModSkel *s = (SModSkel*) ftptr(&ftast, symskel[i].stmt);
+		analyzemodskel(s);
+	}
+
+	Symbol *symdef = (Symbol*) ftptr(&ftsym, modsym[MODDEF].array);
+	for (int i = 0; i < modsym[MODDEF].nsym; i++) {
+		SModDef *s = (SModDef*) ftptr(&ftast, symdef[i].stmt);
+		analyzemoddef(s);
+	}
 
 	Symbol *symf = (Symbol*) ftptr(&ftsym, signatures.array);
 	for (int i = 0; i < signatures.nsym; i++) {
 		intptr stmt = symf[i].stmt;
 		SFun* fun = (SFun*) ftptr(&ftast, stmt);
-		assert(analyzefun(fun, stmt, nsym));
+		assert(analyzefun(NULL, fun, stmt, nsym));
 	}
 
-	printsymbols(&typesym);
-	printsymbols(&identsym);
-	printsymbols(&signatures);
-	printsymbols(&funsym);
+	assert(analyzepub(&pubsym) == 1);
+	printsymbols(stdout, &typesym);
+	printsymbols(stdout, &identsym);
+	printsymbols(stdout, &funsym);
+
+	for (int i = 0; i < NMODSYM; i++) {
+		printsymbols(stdout, modsym + i);
+	}
 
 
 	// -------------------- C0 Generation
 	char *code = 0;
 	int idx = ftalloc(&ftcode, 1);
 	code = (char*)ftptr(&ftcode, idx);
-	size_t sz = gen(code, typesym, identsym, signatures, funsym);
+	size_t sz = gen(code, typesym, identsym, funsym, modsym, pubsym);
 	/* dump to stdout */
 	write(1, code, sz);
 }

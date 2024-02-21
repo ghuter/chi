@@ -1495,7 +1495,7 @@ parse_toplevel_impl(const ETok *t, const intptr ident, intptr *stmt)
 	s->nconv = 0;
 	s->stmts = -1;
 	s->nstmt = 0;
-	
+
 	if (t[i] == SEMICOLON) {
 		i++;
 		s->kind = SDECLMODIMPL;

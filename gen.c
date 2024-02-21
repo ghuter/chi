@@ -328,7 +328,7 @@ getchildtype(intptr expr)
 	UnknownExpr* ptr = (UnknownExpr*) ftptr(&ftast, expr);
 	int type = -1;
 
-	#define TYPEOF(X) do{ \
+#define TYPEOF(X) do{ \
 		X *e = (X*)ptr; \
 		type = ident2langtype[e->type - typeoffset]; \
 		} while(0)
@@ -361,7 +361,7 @@ getchildtype(intptr expr)
 		fprintf(stderr, "default hit with: %d\n", *ptr);
 		return -1;
 	}
-	#undef TYPEOF
+#undef TYPEOF
 
 	return type;
 }
@@ -399,15 +399,16 @@ genexpr(intptr expr)
 		Op op = binop->op;
 		int type = ident2langtype[binop->type - typeoffset];
 		fprintf(stderr, "op: %d, binop->type: %d, type: %d, str: %s\n",
-			op, binop->type, type, optype2inst[op][type]);
+		        op, binop->type, type, optype2inst[op][type]);
 		// bool type: we want the actual operand types
 		if (type == 0) {
 			type = getchildtype(binop->left);
-			if (type <= 0)
+			if (type <= 0) {
 				type = getchildtype(binop->right);
+			}
 		}
 		fprintf(stderr, "op: %d, binop->type: %d, type: %d, str: %s\n",
-			op, binop->type, type, optype2inst[op][type]);
+		        op, binop->type, type, optype2inst[op][type]);
 		if (type <= 0) {
 			ERR("Invalid type for binop");
 			assert(1 || "Invalid type for binop");
@@ -433,7 +434,9 @@ genexpr(intptr expr)
 		genexpr(call->expr);
 		CODEADD("(");
 		for (int i = 0; i < call->nparam; i++) {
-			if (i != 0) CODEADD(", ");
+			if (i != 0) {
+				CODEADD(", ");
+			}
 			genexpr(paramtab[i]);
 		}
 		CODEADD(")");
@@ -459,7 +462,9 @@ genexpr(intptr expr)
 
 		EElem *elem = (EElem*) ftptr(&ftast, st->elems);
 		for (int i = 0; i < st->nelem; i++) {
-			if (i != 0) CODEADD(", ");
+			if (i != 0) {
+				CODEADD(", ");
+			}
 			CODEADD("%s = ", (char*) ftptr(&ftident, elem->ident));
 			genexpr(elem->expr);
 			elem++;
@@ -473,7 +478,46 @@ genexpr(intptr expr)
 }
 
 static void
-genstmt(intptr stmt)
+genfunprot(StmtArray pubsym, intptr stmt)
+{
+	UnknownStmt *ptr = (UnknownStmt*) ftptr(&ftast, stmt);
+	if (stmt == -1) {
+		return;
+	}
+
+	if (*ptr != SFUN)
+		return;
+
+	SFun *fun = (SFun*) ptr;
+	static const EStmt funkind[] = { SFUN, SNOP };
+	char *staticmod = ispub(&pubsym, stmt, funkind) ? "" : "static ";
+	char *ret = fun->type ==  -1 ? "void" : (char*) ftptr(&ftident, fun->type);
+
+	CODEADD("%s%s", staticmod, ret);
+	int ptrlvl = fun->ptrlvl;
+	while (ptrlvl-- > 0) {
+		CODEADD("*");
+	}
+	CODEADD("\n%s(", (char*)ftptr(&ftident, fun->ident));
+
+	SMember* members = (SMember*) ftptr(&ftast, fun->params);
+	for (int i = 0; i < fun->nparam; i++) {
+		if (i != 0) {
+			CODEADD(", ");
+		}
+		CODEADD("%s ", (char*) ftptr(&ftident, members->type));
+		int ptrlvl = members->ptrlvl;
+		while (ptrlvl-- > 0) {
+			CODEADD("*");
+		}
+		CODEADD("%s", (char*) ftptr(&ftident, members->ident));
+		members++;
+	}
+	CODEADD(");\n");
+}
+
+static void
+genstmt(StmtArray pubsym, intptr stmt)
 {
 	UnknownStmt *ptr = (UnknownStmt*) ftptr(&ftast, stmt);
 	if (stmt == -1) {
@@ -506,8 +550,9 @@ genstmt(intptr stmt)
 	}
 	case SDECL: {
 		SDecl *decl = (SDecl*) ptr;
-		if (decl->type == -1)
+		if (decl->type == -1) {
 			ERR("Missing type information.");
+		}
 		char *type = (char*) ftptr(&ftident, decl->type);
 		CODEADD("%s", type);
 		int ptrlvl = decl->ptrlvl;
@@ -519,32 +564,12 @@ genstmt(intptr stmt)
 		CODEADD(";\n");
 		break;
 	}
-	// TODO: use `ispub()` from analyzer.h
 	case SFUN: {
 		SFun *fun = (SFun*) ptr;
-		char *static = ispub(??) ? "" : "static ";
-		char *ret = fun->type ==  -1 ? "void" : (char*) ftptr(&ftident, fun->type);
-
-		CODEADD("%s%s", static, ret);
-		int ptrlvl = fun->ptrlvl;
-		while (ptrlvl-- > 0) {
-			CODEADD("*");
-		}
-		CODEADD("\n%s(", (char*)ftptr(&ftident, fun->ident));
-
-		SMember* members = (SMember*) ftptr(&ftast, fun->params);
-		for (int i = 0; i < fun->nparam; i++) {
-			if (i != 0) CODEADD(", ");
-			CODEADD("%s ", (char*) ftptr(&ftident, members->type));
-			int ptrlvl = members->ptrlvl;
-			while (ptrlvl-- > 0) {
-				CODEADD("*");
-			}
-			CODEADD("%s", (char*) ftptr(&ftident, members->ident));
-			members++;
-		}
-		CODEADD(")\n{\n");
-		genstmt(fun->stmt);
+		genfunprot(pubsym, stmt);
+		hd -= 2; // remove ";\n" from generated prototype
+		CODEADD("\n{\n");
+		genstmt(pubsym, fun->stmt);
 		CODEADD("}\n");
 		break;
 	}
@@ -567,33 +592,33 @@ genstmt(intptr stmt)
 		CODEADD("if (");
 		genexpr(_if->cond);
 		CODEADD(") {\n");
-		genstmt(_if->ifstmt);
+		genstmt(pubsym, _if->ifstmt);
 
 		if (_if->elsestmt > 0) {
 			CODEADD("} else {\n");
-			genstmt(_if->elsestmt);
+			genstmt(pubsym, _if->elsestmt);
 		}
 		CODEADD("}\n");
 		break;
 	}
 	case SSEQ: {
 		SSeq *seq = (SSeq*) ptr;
-		genstmt(seq->stmt);
+		genstmt(pubsym, seq->stmt);
 		// kinda not needed, but makes sure there is a semicolon..
 		/* CODEADD(";\n"); */
-		genstmt(seq->nxt);
+		genstmt(pubsym, seq->nxt);
 		break;
 	}
 	case SFOR: {
 		SFor *_for = (SFor*) ptr;
 		CODEADD("for (\n");
-		genstmt(_for->stmt1);
+		genstmt(pubsym, _for->stmt1);
 		genexpr(_for->expr);
 		CODEADD(";\n");
-		genstmt(_for->stmt2);
+		genstmt(pubsym, _for->stmt2);
 		hd -= 2; // remove ";\n"
 		CODEADD("\n) {\n");
-		genstmt(_for->forstmt);
+		genstmt(pubsym, _for->forstmt);
 		CODEADD("}\n");
 		break;
 	}
@@ -603,7 +628,9 @@ genstmt(intptr stmt)
 
 		intptr *paramtab = (intptr*) ftptr(&ftast, call->params);
 		for (int i = 0; i < call->nparam; i++) {
-			if (i != 0) CODEADD(", ");
+			if (i != 0) {
+				CODEADD(", ");
+			}
 			genexpr(paramtab[i]);
 		}
 		CODEADD(");\n");
@@ -622,7 +649,9 @@ genstmt(intptr stmt)
 
 		SMember* members = (SMember*) ftptr(&ftast, sig->params);
 		for (int i = 0; i < sig->nparam; i++) {
-			if (i != 0) CODEADD(", ");
+			if (i != 0) {
+				CODEADD(", ");
+			}
 			CODEADD("%s ", (char*) ftptr(&ftident, members->type));
 			int ptrlvl = members->ptrlvl;
 			while (ptrlvl-- > 0) {
@@ -635,19 +664,19 @@ genstmt(intptr stmt)
 		break;
 	}
 	case SIMPORT: {
-		TODO("imports");
+		/* TODO("imports"); */
 		// SImport *import = (SImport*) ptr;
 		// fprintf(fd, "%s(%s)", stmtstrs[*ptr], (char*) ftptr(&ftident, import->ident));
 		break;
 	}
 	default:
-		ERR(" Unreachable statement in printstmt.");
+		ERR(" Unreachable statement in genstmt.");
 		assert(1 || "Unreachable stmt");
 	}
 }
 
 size_t
-gen(char *code, Symbols typesym, Symbols identsym, Symbols signatures, Symbols funsym)
+gen(char *code, Symbols typesym, Symbols identsym, Symbols funsym, Symbols modsym[NMODSYM], StmtArray pubsym)
 {
 	hd = code;
 
@@ -668,7 +697,7 @@ gen(char *code, Symbols typesym, Symbols identsym, Symbols signatures, Symbols f
 
 	Symbol *sym = (Symbol*) ftptr(&ftsym, typesym.array);
 	for (int i = 0; i < typesym.nsym; i++) {
-		genstmt(sym[i].stmt);
+		genstmt(pubsym, sym[i].stmt);
 		CODEADD("\n");
 	}
 
@@ -676,28 +705,28 @@ gen(char *code, Symbols typesym, Symbols identsym, Symbols signatures, Symbols f
 
 	Symbol *symd = (Symbol*) ftptr(&ftsym, identsym.array);
 	for (int i = 0; i < identsym.nsym; i++) {
-		genstmt(symd[i].stmt);
+		genstmt(pubsym, symd[i].stmt);
 	}
 
 	CODEADD("\n");
 
 	// TODO: parcourir 2x funsym: 1x pour les prototypes de fonctions, une 2ème pour leurs def..
 
-	Symbol *sig = (Symbol*) ftptr(&ftsym, signatures.array);
-	for (int i = 0; i < signatures.nsym; i++) {
+	Symbol *sig = (Symbol*) ftptr(&ftsym, funsym.array);
+	for (int i = 0; i < funsym.nsym; i++) {
 		intptr stmt = sig[i].stmt;
 		UnknownStmt *ptr = (UnknownStmt*) ftptr(&ftast, stmt);
 		if (stmt == -1 || *ptr != SSIGN) {
 			continue;
 		}
-		genstmt(stmt);
+		genfunprot(pubsym, stmt);
 	}
 
 	CODEADD("\n");
 
 	Symbol *symf = (Symbol*) ftptr(&ftsym, funsym.array);
 	for (int i = 0; i < funsym.nsym; i++) {
-		genstmt(symf[i].stmt);
+		genstmt(pubsym, symf[i].stmt);
 		CODEADD("\n");
 	}
 
