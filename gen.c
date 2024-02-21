@@ -675,6 +675,21 @@ genstmt(StmtArray pubsym, intptr stmt)
 	}
 }
 
+static void
+genmod(StmtArray pubsym, Symbols modsym[NMODSYM])
+{
+	Symbols *syms = 0;
+	Symbol *sym = 0;
+
+	syms = modsym[MODSIGN];
+	sym = (Symbol*) ftptr(&ftsym, syms->array);
+	for (int i = 0; i < syms->nsym; i++) {
+		SModSign *s = (SModSign*) ftptr(&ftast, stmt);
+
+		// generate signatures's data types first
+	}
+}
+
 size_t
 gen(char *code, Symbols typesym, Symbols identsym, Symbols funsym, Symbols modsym[NMODSYM], StmtArray pubsym)
 {
@@ -710,8 +725,6 @@ gen(char *code, Symbols typesym, Symbols identsym, Symbols funsym, Symbols modsy
 
 	CODEADD("\n");
 
-	// TODO: parcourir 2x funsym: 1x pour les prototypes de fonctions, une 2ème pour leurs def..
-
 	Symbol *sig = (Symbol*) ftptr(&ftsym, funsym.array);
 	for (int i = 0; i < funsym.nsym; i++) {
 		intptr stmt = sig[i].stmt;
@@ -721,6 +734,10 @@ gen(char *code, Symbols typesym, Symbols identsym, Symbols funsym, Symbols modsy
 		}
 		genfunprot(pubsym, stmt);
 	}
+
+	CODEADD("\n");
+
+	genmod(pubsym, modsym);
 
 	CODEADD("\n");
 
