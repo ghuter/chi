@@ -519,11 +519,13 @@ genstmt(intptr stmt)
 		CODEADD(";\n");
 		break;
 	}
+	// TODO: use `ispub()` from analyzer.h
 	case SFUN: {
 		SFun *fun = (SFun*) ptr;
+		char *static = ispub(??) ? "" : "static ";
 		char *ret = fun->type ==  -1 ? "void" : (char*) ftptr(&ftident, fun->type);
 
-		CODEADD("%s", ret);
+		CODEADD("%s%s", static, ret);
 		int ptrlvl = fun->ptrlvl;
 		while (ptrlvl-- > 0) {
 			CODEADD("*");
@@ -678,6 +680,8 @@ gen(char *code, Symbols typesym, Symbols identsym, Symbols signatures, Symbols f
 	}
 
 	CODEADD("\n");
+
+	// TODO: parcourir 2x funsym: 1x pour les prototypes de fonctions, une 2ème pour leurs def..
 
 	Symbol *sig = (Symbol*) ftptr(&ftsym, signatures.array);
 	for (int i = 0; i < signatures.nsym; i++) {
