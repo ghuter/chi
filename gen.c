@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <ctype.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -478,6 +479,18 @@ genexpr(intptr expr)
 }
 
 static void
+gentype(intptr type, int ptrlvl)
+{
+	char *t = (char*)ftptr(&ftident, type);
+	// if type is not defined or generic, put "void" as type
+	t = (type == -1 || (isupper(t[0]) && t[1] == '\0')) ? "void" : t;
+	CODEADD("%s", t);
+	while (ptrlvl-- > 0) {
+		CODEADD("*");
+	}
+}
+
+static void
 genfunprot(StmtArray pubsym, intptr stmt)
 {
 	UnknownStmt *ptr = (UnknownStmt*) ftptr(&ftast, stmt);
@@ -490,14 +503,10 @@ genfunprot(StmtArray pubsym, intptr stmt)
 
 	SFun *fun = (SFun*) ptr;
 	static const EStmt funkind[] = { SFUN, SNOP };
-	char *staticmod = ispub(&pubsym, stmt, funkind) ? "" : "static ";
-	char *ret = fun->type ==  -1 ? "void" : (char*) ftptr(&ftident, fun->type);
 
-	CODEADD("%s%s", staticmod, ret);
-	int ptrlvl = fun->ptrlvl;
-	while (ptrlvl-- > 0) {
-		CODEADD("*");
-	}
+	if (ispub(&pubsym, stmt, funkind))
+		CODEADD("static ");
+	gentype(fun->type, fun->ptrlvl);
 	CODEADD("\n%s(", (char*)ftptr(&ftident, fun->ident));
 
 	SMember* members = (SMember*) ftptr(&ftast, fun->params);
@@ -505,15 +514,38 @@ genfunprot(StmtArray pubsym, intptr stmt)
 		if (i != 0) {
 			CODEADD(", ");
 		}
-		CODEADD("%s ", (char*) ftptr(&ftident, members->type));
-		int ptrlvl = members->ptrlvl;
-		while (ptrlvl-- > 0) {
-			CODEADD("*");
-		}
+		gentype(members->type, members->ptrlvl);
+		CODEADD(" ");
 		CODEADD("%s", (char*) ftptr(&ftident, members->ident));
 		members++;
 	}
 	CODEADD(");\n");
+}
+
+static void
+genstruct(intptr stmt)
+{
+	UnknownStmt *ptr = (UnknownStmt*) ftptr(&ftast, stmt);
+	if (stmt == -1) {
+		return;
+	}
+	if (*ptr != SSTRUCT)
+		return;
+	SStruct *s = (SStruct*) ptr;
+	char *ident = (char*) ftptr(&ftident, s->ident);
+	CODEADD("typedef struct %s %s;\n", ident, ident);
+	CODEADD("struct %s {\n", ident);
+
+	SMember* members = (SMember*) ftptr(&ftast, s->members);
+	for (int i = 0; i < s->nmember; i++) {
+		CODEADD("\t");
+		gentype(members->type, members->ptrlvl);
+		CODEADD(" ");
+		CODEADD("%s", (char*) ftptr(&ftident, members->ident));
+		CODEADD(";\n");
+		members++;
+	}
+	CODEADD("};\n");
 }
 
 static void
@@ -528,24 +560,7 @@ genstmt(StmtArray pubsym, intptr stmt)
 	case SNOP:
 		break;
 	case SSTRUCT: {
-		SStruct *s = (SStruct*) ptr;
-		char *ident = (char*) ftptr(&ftident, s->ident);
-		CODEADD("typedef struct %s %s;\n", ident, ident);
-		CODEADD("struct %s {\n", ident);
-
-		SMember* members = (SMember*) ftptr(&ftast, s->members);
-		for (int i = 0; i < s->nmember; i++) {
-			CODEADD("\t");
-			CODEADD("%s ", (char*) ftptr(&ftident, members->type));
-			int ptrlvl = members->ptrlvl;
-			while (ptrlvl-- > 0) {
-				CODEADD("*");
-			}
-			CODEADD("%s", (char*) ftptr(&ftident, members->ident));
-			CODEADD(";\n");
-			members++;
-		}
-		CODEADD("};\n");
+		genstruct(stmt);
 		break;
 	}
 	case SDECL: {
@@ -553,12 +568,7 @@ genstmt(StmtArray pubsym, intptr stmt)
 		if (decl->type == -1) {
 			ERR("Missing type information.");
 		}
-		char *type = (char*) ftptr(&ftident, decl->type);
-		CODEADD("%s", type);
-		int ptrlvl = decl->ptrlvl;
-		while (ptrlvl-- > 0) {
-			CODEADD("*");
-		}
+		gentype(decl->type, decl->ptrlvl);
 		CODEADD(" %s = ", (char*) ftptr(&ftident, decl->ident));
 		genexpr(decl->expr);
 		CODEADD(";\n");
@@ -638,13 +648,8 @@ genstmt(StmtArray pubsym, intptr stmt)
 	}
 	case SSIGN: {
 		SSign *sig = (SSign*) ptr;
-		char *ret = sig->type ==  -1 ? "void" : (char*) ftptr(&ftident, sig->type);
 
-		CODEADD("%s", ret);
-		int ptrlvl = sig->ptrlvl;
-		while (ptrlvl-- > 0) {
-			CODEADD("*");
-		}
+		gentype(sig->type, sig->ptrlvl);
 		CODEADD(" %s(", (char*)ftptr(&ftident, sig->ident));
 
 		SMember* members = (SMember*) ftptr(&ftast, sig->params);
@@ -652,11 +657,8 @@ genstmt(StmtArray pubsym, intptr stmt)
 			if (i != 0) {
 				CODEADD(", ");
 			}
-			CODEADD("%s ", (char*) ftptr(&ftident, members->type));
-			int ptrlvl = members->ptrlvl;
-			while (ptrlvl-- > 0) {
-				CODEADD("*");
-			}
+			gentype(members->type, members->ptrlvl);
+			CODEADD(" ");
 			CODEADD("%s", (char*) ftptr(&ftident, members->ident));
 			members++;
 		}
@@ -676,17 +678,64 @@ genstmt(StmtArray pubsym, intptr stmt)
 }
 
 static void
-genmod(StmtArray pubsym, Symbols modsym[NMODSYM])
+genmod(Symbols modsym[NMODSYM])
 {
 	Symbols *syms = 0;
 	Symbol *sym = 0;
+	intptr *stmt = 0;
 
-	syms = modsym[MODSIGN];
+	syms = &modsym[MODSIGN];
 	sym = (Symbol*) ftptr(&ftsym, syms->array);
 	for (int i = 0; i < syms->nsym; i++) {
-		SModSign *s = (SModSign*) ftptr(&ftast, stmt);
+		SModSign *s = (SModSign*) ftptr(&ftast, sym[i].stmt);
 
-		// generate signatures's data types first
+		// generate signature's data types first
+		stmt = (intptr*)ftptr(&ftast, s->stmts);
+		for (int j = 0; j < s->nstmt; j++) {
+			UnknownStmt *ptr = (UnknownStmt*)ftptr(&ftast, stmt[j]);
+			if (*ptr != SSTRUCT)
+				continue;
+			genstruct(stmt[j]);
+		}
+
+		// generate function pointers
+		stmt = (intptr*)ftptr(&ftast, s->stmts);
+		for (int j = 0; j < s->nstmt; j++) {
+			UnknownStmt *ptr = (UnknownStmt*)ftptr(&ftast, stmt[j]);
+			if (*ptr != SSIGN)
+				continue;
+			SFun *fun = (SFun*)ptr;
+
+			CODEADD("typedef ");
+			gentype(fun->type, fun->ptrlvl);
+			CODEADD("(*%s_fn)", (char*)ftptr(&ftident, fun->ident));
+
+			CODEADD("(");
+			SMember* members = (SMember*)ftptr(&ftast, fun->params);
+			for (int i = 0; i < fun->nparam; i++) {
+				if (i != 0) {
+					CODEADD(", ");
+				}
+				gentype(members->type, members->ptrlvl);
+				CODEADD(" ");
+				CODEADD("%s", (char*)ftptr(&ftident, members->ident));
+				members++;
+			}
+			CODEADD(");\n");
+		}
+
+		// generate vtable
+		CODEADD("typedef struct {\n");
+		stmt = (intptr*)ftptr(&ftast, s->stmts);
+		for (int j = 0; j < s->nstmt; j++) {
+			UnknownStmt *ptr = (UnknownStmt*)ftptr(&ftast, stmt[j]);
+			if (*ptr != SSIGN)
+				continue;
+			SFun *fun = (SFun*)ptr;
+			char *fn_ident = (char*)ftptr(&ftident, fun->ident);
+			CODEADD("\t%s_fn %s\n", fn_ident, fn_ident);
+		}
+		CODEADD("} %s;\n", (char*)ftptr(&ftident, s->ident));
 	}
 }
 
@@ -737,7 +786,7 @@ gen(char *code, Symbols typesym, Symbols identsym, Symbols funsym, Symbols modsy
 
 	CODEADD("\n");
 
-	genmod(pubsym, modsym);
+	genmod(modsym);
 
 	CODEADD("\n");
 
