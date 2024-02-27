@@ -423,7 +423,7 @@ printstmt(FILE *fd, intptr stmt)
 	}
 	case SIMPORT: {
 		SImport *import = (SImport*) ptr;
-		fprintf(fd, "%s(%s)", stmtstrs[*ptr], (char*) ftptr(&ftident, import->ident));
+		fprintf(fd, "%s(%s)", stmtstrs[*ptr], (char*) ftptr(&ftlit, import->lit));
 		return;
 	}
 	case SMODSIGN: {
@@ -2413,14 +2413,14 @@ static int
 parse_toplevel_import(const ETok *t, intptr *stmt)
 {
 	int i = 0;
-	int ident = -1;
+	int lit = -1;
 
-	if (t[i] != IDENTIFIER) {
-		ERR("Exepects an <IDENTIFIER>: `import` <IDENTIFIER> `;`");
+	if (t[i] != LITERAL) {
+		ERR("Exepects an <LITERAL>: `import` \" <PATH> \" `;`");
 		return -1;
 	}
 	i++;
-	ident = t[i];
+	lit = t[i];
 	i++;
 
 	if (t[i] != SEMICOLON) {
@@ -2433,7 +2433,7 @@ parse_toplevel_import(const ETok *t, intptr *stmt)
 	*stmt = iaddr;
 	SImport *import = (SImport*) ftptr(&ftast, iaddr);
 	import->kind = SIMPORT;
-	import->ident = ident;
+	import->lit = lit;
 
 	return i;
 }

@@ -139,7 +139,7 @@ typedef struct {
 
 typedef struct {
 	EStmt kind;
-	intptr ident; // ftident -> char*
+	intptr lit; // ftlit -> char*
 } SImport;
 
 typedef struct {
