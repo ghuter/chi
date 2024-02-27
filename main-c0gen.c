@@ -202,13 +202,17 @@ main(int argc, char *argv[])
 	}
 
 	assert(analyzepub(&pubsym) == 1);
+	/*
 	printsymbols(stdout, &typesym);
 	printsymbols(stdout, &identsym);
 	printsymbols(stdout, &funsym);
+	*/
 
+	/*
 	for (int i = 0; i < NMODSYM; i++) {
 		printsymbols(stdout, modsym + i);
 	}
+	*/
 
 
 	// -------------------- C0 Generation

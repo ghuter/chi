@@ -323,6 +323,15 @@ static const char* uop2str[UOP_NUM] = {
 	[UOP_SIZEOF] = "sizeof",
 };
 
+static int getchildtype(intptr expr);
+static void genexpr(intptr expr);
+static void gentype(intptr type, int ptrlvl);
+static void genfunprot(StmtArray pubsym, intptr stmt, char *prefix, char *sig_name);
+static void genfun(StmtArray pubsym, intptr stmt, char *prefix, char *sig_name);
+static void genstruct(intptr stmt, char *prefix);
+static void genstmt(StmtArray pubsym, intptr stmt);
+static void genmod(StmtArray pubsym, Symbols modsym[NMODSYM]);
+
 static int
 getchildtype(intptr expr)
 {
@@ -430,9 +439,17 @@ genexpr(intptr expr)
 	}
 	case ECALL: {
 		ECall *call = (ECall*) ptr;
-		intptr *paramtab = (intptr*) ftptr(&ftast, call->params);
+		UnknownExpr *ptrnext = (UnknownExpr*) ftptr(&ftast, call->expr);
 
-		genexpr(call->expr);
+		if (*ptrnext == EACCESS) {
+			EAccess *ac = (EAccess*)ptrnext;
+			genexpr(ac->expr);
+			CODEADD("__%s", (char*) ftptr(&ftident, ac->ident));
+		} else {
+			genexpr(call->expr);
+		}
+
+		intptr *paramtab = (intptr*) ftptr(&ftast, call->params);
 		CODEADD("(");
 		for (int i = 0; i < call->nparam; i++) {
 			if (i != 0) {
@@ -473,8 +490,16 @@ genexpr(intptr expr)
 		CODEADD("}");
 		break;
 	}
+	case ETRUE: {
+		CODEADD("1");
+		break;
+	}
+	case EFALSE: {
+		CODEADD("0");
+		break;
+	}
 	default:
-		assert(1 || "Unreachable epxr");
+		assert(1 || "Unreachable expr");
 	}
 }
 
@@ -491,7 +516,7 @@ gentype(intptr type, int ptrlvl)
 }
 
 static void
-genfunprot(StmtArray pubsym, intptr stmt)
+genfunprot(StmtArray pubsym, intptr stmt, char *prefix, char *sig_name)
 {
 	UnknownStmt *ptr = (UnknownStmt*) ftptr(&ftast, stmt);
 	if (stmt == -1) {
@@ -504,10 +529,19 @@ genfunprot(StmtArray pubsym, intptr stmt)
 	SFun *fun = (SFun*) ptr;
 	static const EStmt funkind[] = { SFUN, SNOP };
 
-	if (ispub(&pubsym, stmt, funkind))
+	if (!ispub(&pubsym, stmt, funkind))
 		CODEADD("static ");
 	gentype(fun->type, fun->ptrlvl);
-	CODEADD("\n%s(", (char*)ftptr(&ftident, fun->ident));
+	CODEADD("\n");
+	if (prefix)
+		CODEADD("%s__", prefix);
+	CODEADD("%s(", (char*)ftptr(&ftident, fun->ident));
+
+	if (sig_name) {
+		CODEADD("%s__Modules __M", sig_name);
+		if (fun->nparam > 0)
+			CODEADD(", ");
+	}
 
 	SMember* members = (SMember*) ftptr(&ftast, fun->params);
 	for (int i = 0; i < fun->nparam; i++) {
@@ -523,7 +557,26 @@ genfunprot(StmtArray pubsym, intptr stmt)
 }
 
 static void
-genstruct(intptr stmt)
+genfun(StmtArray pubsym, intptr stmt, char *prefix, char *sig_name)
+{
+	UnknownStmt *ptr = (UnknownStmt*) ftptr(&ftast, stmt);
+	if (stmt == -1) {
+		return;
+	}
+
+	if (*ptr != SFUN)
+		return;
+
+	SFun *fun = (SFun*) ptr;
+	genfunprot(pubsym, stmt, prefix, sig_name);
+	hd -= 2; // remove ";\n" from generated prototype
+	CODEADD("\n{\n");
+	genstmt(pubsym, fun->stmt);
+	CODEADD("}\n");
+}
+
+static void
+genstruct(intptr stmt, char *prefix)
 {
 	UnknownStmt *ptr = (UnknownStmt*) ftptr(&ftast, stmt);
 	if (stmt == -1) {
@@ -533,8 +586,14 @@ genstruct(intptr stmt)
 		return;
 	SStruct *s = (SStruct*) ptr;
 	char *ident = (char*) ftptr(&ftident, s->ident);
-	CODEADD("typedef struct %s %s;\n", ident, ident);
-	CODEADD("struct %s {\n", ident);
+
+	if (prefix) {
+		CODEADD("typedef struct %s__%s %s__%s;\n", prefix, ident, prefix, ident);
+		CODEADD("struct %s__%s {\n", prefix, ident);
+	} else {
+		CODEADD("typedef struct %s %s;\n", ident, ident);
+		CODEADD("struct %s {\n", ident);
+	}
 
 	SMember* members = (SMember*) ftptr(&ftast, s->members);
 	for (int i = 0; i < s->nmember; i++) {
@@ -560,7 +619,7 @@ genstmt(StmtArray pubsym, intptr stmt)
 	case SNOP:
 		break;
 	case SSTRUCT: {
-		genstruct(stmt);
+		genstruct(stmt, 0);
 		break;
 	}
 	case SDECL: {
@@ -575,12 +634,7 @@ genstmt(StmtArray pubsym, intptr stmt)
 		break;
 	}
 	case SFUN: {
-		SFun *fun = (SFun*) ptr;
-		genfunprot(pubsym, stmt);
-		hd -= 2; // remove ";\n" from generated prototype
-		CODEADD("\n{\n");
-		genstmt(pubsym, fun->stmt);
-		CODEADD("}\n");
+		genfun(pubsym, stmt, 0, 0);
 		break;
 	}
 	case SRETURN: {
@@ -671,34 +725,59 @@ genstmt(StmtArray pubsym, intptr stmt)
 		// fprintf(fd, "%s(%s)", stmtstrs[*ptr], (char*) ftptr(&ftident, import->ident));
 		break;
 	}
+	case SACCESSMOD: {
+		SAccessMod *access = (SAccessMod*)ptr;
+		CODEADD("%s__", (char*)ftptr(&ftident, access->mod));
+		genstmt(pubsym, access->stmt);
+		break;
+	}
 	default:
-		ERR(" Unreachable statement in genstmt.");
+		ERR(" Unreachable statement in genstmt: %s", stmtstrs[*ptr]);
 		assert(1 || "Unreachable stmt");
 	}
 }
 
 static void
-genmod(Symbols modsym[NMODSYM])
+genmod(StmtArray pubsym, Symbols modsym[NMODSYM])
 {
 	Symbols *syms = 0;
 	Symbol *sym = 0;
 	intptr *stmt = 0;
 
+	CODEADD("// --- SIGNATURES\n");
 	syms = &modsym[MODSIGN];
 	sym = (Symbol*) ftptr(&ftsym, syms->array);
 	for (int i = 0; i < syms->nsym; i++) {
 		SModSign *s = (SModSign*) ftptr(&ftast, sym[i].stmt);
+		char *sig_name = (char*)ftptr(&ftident, s->ident);
 
-		// generate signature's data types first
+		CODEADD("// signature's data types first\n");
 		stmt = (intptr*)ftptr(&ftast, s->stmts);
 		for (int j = 0; j < s->nstmt; j++) {
 			UnknownStmt *ptr = (UnknownStmt*)ftptr(&ftast, stmt[j]);
 			if (*ptr != SSTRUCT)
 				continue;
-			genstruct(stmt[j]);
+			genstruct(stmt[j], sig_name);
 		}
+		CODEADD("\n");
 
-		// generate function pointers
+		CODEADD("// signature's arg table\n");
+		if (s->signatures != -1) {
+			CODEADD("typedef struct {\n");
+			SSignatures *sigs = (SSignatures*)ftptr(&ftast, s->signatures);
+			SSignature *sig = (SSignature*)ftptr(&ftast, sigs->signs);
+			for (int j = 0; j < sigs->nsign; j++) {
+				char *sig_ident = (char*)ftptr(&ftident, sig[j].signature);
+				char *param_ident = (char*)ftptr(&ftident, sig[j].ident);
+				CODEADD("\t%s %s;\n", sig_ident, param_ident);
+			}
+			CODEADD("} %s__Modules;\n", sig_name);
+		} else {
+			CODEADD("typedef %s__Modules void;\n", sig_name);
+		}
+		CODEADD("\n");
+
+		CODEADD("// signature's function pointers\n");
 		stmt = (intptr*)ftptr(&ftast, s->stmts);
 		for (int j = 0; j < s->nstmt; j++) {
 			UnknownStmt *ptr = (UnknownStmt*)ftptr(&ftast, stmt[j]);
@@ -708,9 +787,12 @@ genmod(Symbols modsym[NMODSYM])
 
 			CODEADD("typedef ");
 			gentype(fun->type, fun->ptrlvl);
-			CODEADD("(*%s_fn)", (char*)ftptr(&ftident, fun->ident));
+			CODEADD(" (*%s_fn)", (char*)ftptr(&ftident, fun->ident));
 
 			CODEADD("(");
+			CODEADD("%s__Modules __M", sig_name);
+			if (fun->nparam > 0)
+				CODEADD(", ");
 			SMember* members = (SMember*)ftptr(&ftast, fun->params);
 			for (int i = 0; i < fun->nparam; i++) {
 				if (i != 0) {
@@ -723,8 +805,9 @@ genmod(Symbols modsym[NMODSYM])
 			}
 			CODEADD(");\n");
 		}
+		CODEADD("\n");
 
-		// generate vtable
+		CODEADD("// signature's vtable\n");
 		CODEADD("typedef struct {\n");
 		stmt = (intptr*)ftptr(&ftast, s->stmts);
 		for (int j = 0; j < s->nstmt; j++) {
@@ -733,10 +816,103 @@ genmod(Symbols modsym[NMODSYM])
 				continue;
 			SFun *fun = (SFun*)ptr;
 			char *fn_ident = (char*)ftptr(&ftident, fun->ident);
-			CODEADD("\t%s_fn %s\n", fn_ident, fn_ident);
+			CODEADD("\t%s_fn %s;\n", fn_ident, fn_ident);
 		}
 		CODEADD("} %s;\n", (char*)ftptr(&ftident, s->ident));
+		CODEADD("\n");
 	}
+	CODEADD("\n");
+
+	CODEADD("// --- IMPLEMENTATIONS\n");
+	syms = &modsym[MODIMPL];
+	sym = (Symbol*) ftptr(&ftsym, syms->array);
+	for (int i = 0; i < syms->nsym; i++) {
+		SModImpl *s = (SModImpl*) ftptr(&ftast, sym[i].stmt);
+		char *impl_name = (char*)ftptr(&ftident, s->ident);
+		char *sig_name = (char*)ftptr(&ftident, s->signature);
+
+		CODEADD("// implementation's arg table\n");
+		if (s->modules != -1) {
+			CODEADD("typedef struct {\n");
+			SSignatures *sigs = (SSignatures*)ftptr(&ftast, s->modules);
+			SSignature *sig = (SSignature*)ftptr(&ftast, sigs->signs);
+			for (int j = 0; j < sigs->nsign; j++) {
+				char *sig_ident = (char*)ftptr(&ftident, sig[j].signature);
+				char *param_ident = (char*)ftptr(&ftident, sig[j].ident);
+				CODEADD("\t%s %s;\n", sig_ident, param_ident);
+			}
+			CODEADD("} %s__Modules;\n", sig_name);
+		} else {
+			CODEADD("typedef %s__Modules void;\n", sig_name);
+		}
+		CODEADD("\n");
+
+		CODEADD("// implementation's functions\n");
+		stmt = (intptr*)ftptr(&ftast, s->stmts);
+		for (int j = 0; j < s->nstmt; j++) {
+			UnknownStmt *ptr = (UnknownStmt*)ftptr(&ftast, stmt[j]);
+			// has to be a function
+			if (*ptr != SFUN)
+				continue;
+			genfun(pubsym, stmt[j], impl_name, sig_name);
+		}
+		CODEADD("\n");
+
+		CODEADD("// implementation's function table\n");
+		CODEADD("%s %s = (%s) {\n", sig_name, impl_name, sig_name);
+		stmt = (intptr*)ftptr(&ftast, s->stmts);
+		for (int j = 0; j < s->nstmt; j++) {
+			UnknownStmt *ptr = (UnknownStmt*)ftptr(&ftast, stmt[j]);
+			// has to be a function
+			if (*ptr != SFUN)
+				continue;
+			SFun *fun = (SFun*)ptr;
+			char *fn_ident = (char*)ftptr(&ftident, fun->ident);
+			CODEADD("\t.%s = %s__%s;\n", fn_ident, impl_name, fn_ident);
+		}
+		CODEADD("};\n");
+		CODEADD("\n");
+	}
+	CODEADD("\n");
+
+	CODEADD("// --- SKELETONS\n");
+	syms = &modsym[MODSKEL];
+	sym = (Symbol*) ftptr(&ftsym, syms->array);
+	for (int i = 0; i < syms->nsym; i++) {
+		SModSkel *s = (SModSkel*) ftptr(&ftast, sym[i].stmt);
+		char *skel_name = (char*)ftptr(&ftident, s->ident);
+
+		CODEADD("// skeleton's functions\n");
+		stmt = (intptr*)ftptr(&ftast, s->stmts);
+		for (int j = 0; j < s->nstmt; j++) {
+			UnknownStmt *ptr = (UnknownStmt*)ftptr(&ftast, stmt[j]);
+			// has to be a function
+			if (*ptr != SFUN)
+				continue;
+			genfun(pubsym, stmt[j], skel_name, "FancyName");
+		}
+	}
+	CODEADD("\n");
+
+	CODEADD("// --- DEFINITIONS\n");
+	syms = &modsym[MODDEF];
+	sym = (Symbol*) ftptr(&ftsym, syms->array);
+	for (int i = 0; i < syms->nsym; i++) {
+		SModDef *s = (SModDef*)ftptr(&ftast, sym[i].stmt);
+		/* char *impl_name = (char*)ftptr(&ftident, s->ident); */
+		char *skel_name = (char*)ftptr(&ftident, s->skeleton);
+
+		Symbol *sy = searchtopdcl(modsym + MODSKEL, s->skeleton);
+		if (sy == NULL) {
+			continue;
+		}
+		SModSkel *skel = (SModSkel*)ftptr(&ftast, sy->stmt);
+		char *sig_name = (char*)ftptr(&ftident, skel->signature);
+
+		CODEADD("%s__Modules %s = {\n", sig_name, skel_name);
+		CODEADD("};");
+	}
+	CODEADD("\n");
 }
 
 size_t
@@ -744,6 +920,7 @@ gen(char *code, Symbols typesym, Symbols identsym, Symbols funsym, Symbols modsy
 {
 	hd = code;
 
+#if 1
 	FILE *fp = 0;
 	size_t fsz = 0;
 	fp = fopen("lib/c0.h", "r");
@@ -757,23 +934,25 @@ gen(char *code, Symbols typesym, Symbols identsym, Symbols funsym, Symbols modsy
 	fread(hd, 1, fsz, fp);
 	hd += fsz;
 	fclose(fp);
-	CODEADD("\n\n");
+	CODEADD("\n");
+#endif
 
+	CODEADD("// --- TYPES\n");
 	Symbol *sym = (Symbol*) ftptr(&ftsym, typesym.array);
 	for (int i = 0; i < typesym.nsym; i++) {
 		genstmt(pubsym, sym[i].stmt);
 		CODEADD("\n");
 	}
-
 	CODEADD("\n");
 
+	CODEADD("// --- CONSTANTS\n");
 	Symbol *symd = (Symbol*) ftptr(&ftsym, identsym.array);
 	for (int i = 0; i < identsym.nsym; i++) {
 		genstmt(pubsym, symd[i].stmt);
 	}
-
 	CODEADD("\n");
 
+	CODEADD("// --- FUNCTION PROTOTYPES\n");
 	Symbol *sig = (Symbol*) ftptr(&ftsym, funsym.array);
 	for (int i = 0; i < funsym.nsym; i++) {
 		intptr stmt = sig[i].stmt;
@@ -781,15 +960,14 @@ gen(char *code, Symbols typesym, Symbols identsym, Symbols funsym, Symbols modsy
 		if (stmt == -1 || *ptr != SSIGN) {
 			continue;
 		}
-		genfunprot(pubsym, stmt);
+		genfunprot(pubsym, stmt, 0, 0);
 	}
-
 	CODEADD("\n");
 
-	genmod(modsym);
-
+	genmod(pubsym, modsym);
 	CODEADD("\n");
 
+	CODEADD("// --- FUNCTIONS\n");
 	Symbol *symf = (Symbol*) ftptr(&ftsym, funsym.array);
 	for (int i = 0; i < funsym.nsym; i++) {
 		genstmt(pubsym, symf[i].stmt);

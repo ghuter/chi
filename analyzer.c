@@ -307,7 +307,7 @@ printsymbolsinfo(FILE* fd, int nsym)
 	}
 }
 
-static Symbol*
+Symbol*
 searchtopdcl(Symbols *syms, intptr ident)
 {
 	Symbol *sym = (Symbol*) ftptr(&ftsym, syms->array);

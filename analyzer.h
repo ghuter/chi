@@ -60,4 +60,5 @@ Bool analyzemodimpl(SModImpl *impl);
 Bool analyzemodskel(SModSkel *skel);
 Bool analyzemoddef(SModDef *def);
 Bool analyzepub(StmtArray *pubsym);
+Symbol* searchtopdcl(Symbols *syms, intptr ident);
 #endif /* ANALYSE_H */
