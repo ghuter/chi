@@ -219,7 +219,7 @@ main(int argc, char *argv[])
 	char *code = 0;
 	int idx = ftalloc(&ftcode, 1);
 	code = (char*)ftptr(&ftcode, idx);
-	size_t sz = gen(code, typesym, identsym, funsym, modsym, pubsym);
+	size_t sz = gen(code, typesym, identsym, signatures, funsym, modsym, pubsym);
 	/* dump to stdout */
 	write(1, code, sz);
 }

@@ -386,7 +386,7 @@ genexpr(intptr expr)
 		break;
 	case ECSTI: {
 		Csti *csti = (Csti*) ptr;
-		CODEADD("%ld", *((int64_t*) ftptr(&ftimmed, csti->addr)));
+		CODEADD("%lld", *((int64_t*) ftptr(&ftimmed, csti->addr)));
 		break;
 	}
 	case ECSTF: {
@@ -523,19 +523,20 @@ genfunprot(StmtArray pubsym, intptr stmt, char *prefix, char *sig_name)
 		return;
 	}
 
-	if (*ptr != SFUN)
+	if (*ptr != SFUN && *ptr != SSIGN)
 		return;
 
 	SFun *fun = (SFun*) ptr;
 	static const EStmt funkind[] = { SFUN, SNOP };
+	char *fun_ident = (char*)ftptr(&ftident, fun->ident);
 
-	if (!ispub(&pubsym, stmt, funkind))
+	if (!ispub(&pubsym, stmt, funkind) && strcmp(fun_ident, "main"))
 		CODEADD("static ");
 	gentype(fun->type, fun->ptrlvl);
 	CODEADD("\n");
 	if (prefix)
 		CODEADD("%s__", prefix);
-	CODEADD("%s(", (char*)ftptr(&ftident, fun->ident));
+	CODEADD("%s(", fun_ident);
 
 	if (sig_name) {
 		CODEADD("%s__Modules __M", sig_name);
@@ -916,7 +917,7 @@ genmod(StmtArray pubsym, Symbols modsym[NMODSYM])
 }
 
 size_t
-gen(char *code, Symbols typesym, Symbols identsym, Symbols funsym, Symbols modsym[NMODSYM], StmtArray pubsym)
+gen(char *code, Symbols typesym, Symbols identsym, Symbols signatures, Symbols funsym, Symbols modsym[NMODSYM], StmtArray pubsym)
 {
 	hd = code;
 
@@ -953,8 +954,8 @@ gen(char *code, Symbols typesym, Symbols identsym, Symbols funsym, Symbols modsy
 	CODEADD("\n");
 
 	CODEADD("// --- FUNCTION PROTOTYPES\n");
-	Symbol *sig = (Symbol*) ftptr(&ftsym, funsym.array);
-	for (int i = 0; i < funsym.nsym; i++) {
+	Symbol *sig = (Symbol*) ftptr(&ftsym, signatures.array);
+	for (int i = 0; i < signatures.nsym; i++) {
 		intptr stmt = sig[i].stmt;
 		UnknownStmt *ptr = (UnknownStmt*) ftptr(&ftast, stmt);
 		if (stmt == -1 || *ptr != SSIGN) {

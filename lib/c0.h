@@ -6,7 +6,8 @@
 #define FORCE_INLINE __attribute__((always_inline)) inline
 
 typedef signed char i8;
-typedef unsigned char u8;
+typedef char u8;
+/* typedef unsigned char u8; */
 typedef signed short i16;
 typedef unsigned short u16;
 typedef signed int i32;

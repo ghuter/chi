@@ -1,0 +1,54 @@
+#!/bin/sh
+
+me=$(basename "$0")
+base=$(dirname "$(realpath "$0")")
+
+err() { printf '%s: error: %s\n' "$me" "$*" >&2; exit 1; }
+warn() { printf '%s: warning: %s\n' "$me" "$*" >&2; }
+
+usage() {
+	printf 'usage: %s [-b] [file.chi] [-o file.out]\n' "$me" >&2
+	exit 1
+}
+
+build=0
+in=/dev/stdin
+
+while [ "$1" ]; do
+	case $1 in
+	-b)
+		build=1
+		;;
+	-o)
+		shift
+		[ "$1" ] || usage
+		[ -f "$1" ] || warn "file already exists: $1"
+		out=$1
+		;;
+	*)
+		[ -f "$1" ] || err "not a file: $1"
+		in=$1
+		;;
+	esac
+	shift
+done
+
+if ! [ "$out" ]; then
+	if [ "$in" = '/dev/stdin' ]; then
+		out=/dev/stdout
+		if [ $build -gt 0 ]; then
+			warn 'cannot build when reading stdin'
+			build=0
+		fi
+	else
+		out=${in%.chi}.c0
+	fi
+fi
+
+if [ $build -eq 0 ]; then
+	"$base"/gen < "$in" > "$out"
+else
+	"$base"/gen < "$in" > "$out" &&
+		cc -Wno-undefined-internal -x c "$out" -o "${out%.c0}"
+fi
+
