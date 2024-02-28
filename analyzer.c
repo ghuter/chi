@@ -445,7 +445,7 @@ promotion(intptr type1, int ptrlvl1, intptr type2, int ptrlvl2, int *rtype, intp
 		}
 
 		// type 2 is a langtype
-		LangType langtype = ident2langtype[type2];
+		LangType langtype = ident2langtype[type2 - typeoffset];
 		if (langtype == F32 || langtype == F64) {
 			ERR("No operation can be performed between <%s> and <%s>.", (char*) ftptr(&ftident, type1), (char*) ftptr(&ftident, type2));
 			return 0;
@@ -1592,13 +1592,57 @@ analyzefunexpr(AnalyzeCtx *ctx, intptr expr, intptr *type, int *ptrlvl, intptr t
 			return 0;
 		}
 
-		if ((cptrlvl < 1 || c->ptrlvl < 1) && cptrlvl != c->ptrlvl) {
-			ERR("Impossible to cast a <%s: ptrlvl(%d)> into <%s: ptrlvl(%d)>.", identstr(ctype), cptrlvl, identstr(c->type), c->ptrlvl);
-			return 0;
-		}
+		// if ((cptrlvl < 1 || c->ptrlvl < 1) && cptrlvl != c->ptrlvl) {
+		// 	ERR("Impossible to cast a <%s: ptrlvl(%d)> into <%s: ptrlvl(%d)>.", identstr(ctype), cptrlvl, identstr(c->type), c->ptrlvl);
+		// 	return 0;
+		// }
 
 		*type = c->type;
 		*ptrlvl = c->ptrlvl;
+		return 1;
+	}
+	case ESUBSCR: {
+		ESubscr *s = (ESubscr*) unknown;	
+
+		intptr typeexpr = -1;
+		int ptrlvlexpr = 0;
+		if (!analyzefunexpr(ctx, s->expr, &typeexpr, &ptrlvlexpr, -1, nsym)) {
+			ERR("Error when analyzefunexpr on a <ESUBSCR>.");
+			return 0;
+		}
+
+		if (ptrlvlexpr < 1) {
+			ERR("Can't subscribe a non pointer.");
+			return 0;
+		}
+
+		intptr typeidx = -1;
+		int ptrlvlidx = 0;
+		if (!analyzefunexpr(ctx, s->idxexpr, &typeidx, &ptrlvlidx, -1, nsym)) {
+			ERR("Error when analyzefunexpr on a <ESUBSCR>.");
+			return 0;
+		}
+
+		if (ptrlvlidx != 0) {
+			ERR("Can't subscribe with a pointer.");
+			return 0;
+		}
+
+		if (!islangtype(typeidx)) {
+			ERR("Can't subscribe with a structure <%s>.", identstr(typeidx));
+			return 0;
+		}
+
+		int ltype = ident2langtype[typeidx - typeoffset];
+		if (ltype < U8 || ltype > I128) {
+			ERR("Can't subscribe an array with the type <%s>.", identstr(typeidx));
+			return 0;
+		}
+
+		s->type = typeexpr;
+		*type = typeexpr;
+		s->ptrlvl = ptrlvlexpr - 1;
+		*ptrlvl = ptrlvlexpr - 1;
 		return 1;
 	}
 

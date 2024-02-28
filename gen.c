@@ -320,7 +320,7 @@ static const char* uop2str[UOP_NUM] = {
 	[UOP_LNOT]   = "!",
 	[UOP_BNOT]   = "!",
 	[UOP_AT]     = "&",
-	[UOP_DEREF]  = "^",
+	[UOP_DEREF]  = "*",
 	[UOP_SIZEOF] = "sizeof",
 };
 
@@ -418,12 +418,21 @@ genexpr(intptr expr)
 				type = getchildtype(binop->right);
 			}
 		}
-		fprintf(stderr, "op: %d, binop->type: %d, type: %d, str: %s\n",
-		        op, binop->type, type, optype2inst[op][type]);
 		if (type <= 0) {
 			ERR("Invalid type for binop");
 			assert(1 || "Invalid type for binop");
 		}
+
+		if (binop->ptrlvl > 0) {
+			type = U64;
+			CODEADD("(");
+			gentype(binop->type, binop->ptrlvl);
+			CODEADD(")");
+		}
+
+		fprintf(stderr, "op: %d, binop->type: %d, type: %d, str: %s\n",
+		        op, binop->type, type, optype2inst[op][type]);
+
 		CODEADD("%s(", optype2inst[op][type]);
 		genexpr(binop->left);
 		CODEADD(", ");
@@ -497,6 +506,14 @@ genexpr(intptr expr)
 	}
 	case EFALSE: {
 		CODEADD("0");
+		break;
+	}
+	case ECAST: {
+		ECast *c = (ECast*) ptr;
+		CODEADD("(");
+		gentype(c->type, c->ptrlvl);
+		CODEADD(")");
+		genexpr(c->expr);
 		break;
 	}
 	default:
