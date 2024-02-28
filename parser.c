@@ -2493,7 +2493,7 @@ inserttopdcl(Symbols *syms, intptr ident, intptr stmt)
 }
 
 int
-parse_tokens(const ETok *t, Symbols *signatures, Symbols *identsym, Symbols *typesym, Symbols modsym[NMODSYM], StmtArray *pubsym)
+parse_tokens(const ETok *t, Symbols *signatures, Symbols *identsym, Symbols *typesym, Symbols modsym[NMODSYM], StmtArray *pubsym, StmtArray *imports)
 {
 	int i = 0;
 	int res = -1;
@@ -2537,6 +2537,9 @@ parse_tokens(const ETok *t, Symbols *signatures, Symbols *identsym, Symbols *typ
 		}
 		case SIMPORT: {
 			TODO("save imports");
+			intptr *array = (intptr*) ftptr(&ftsym, imports->stmts);
+			array[imports->nstmt] = stmt;
+			imports->nstmt += 1;
 			break;
 		}
 		case SMODDEF:

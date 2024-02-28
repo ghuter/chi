@@ -402,8 +402,7 @@ typedef struct {
 int parse_toplevel(const ETok *t, intptr *stmt, int *pub);
 void printexpr(FILE *fd, intptr expr);
 void printstmt(FILE *fd, intptr stmt);
-int parse_tokens(const ETok *t, Symbols *signatures, Symbols *identsym, Symbols *typesym, Symbols modsym[NMODSYM], StmtArray *pubsym);
-
+int parse_tokens(const ETok *t, Symbols *signatures, Symbols *identsym, Symbols *typesym, Symbols modsym[NMODSYM], StmtArray *pubsym, StmtArray *imports);
 
 extern const char *uopstrs[UOP_NUM];
 extern const char *stmtstrs[NSTATEMENT];

@@ -51,7 +51,9 @@ extern const char* langtypestrs[NLANGTYPE];
 
 void printsymbols(FILE* fd, Symbols *syms);
 void printsymbolsinfo(FILE* fd, int nsym);
+void printstmtarray(FILE *fd, StmtArray *array);
 Bool ispub(const StmtArray *pubsym, const intptr ident, const EStmt *kind);
+Bool analyseimport(StmtArray *imports);
 Bool analyzetype(SStruct *stmt);
 Bool analyzeglobalcst(SDecl *decl, int nelem);
 Bool analyzefun(AnalyzeCtx *ctx, SFun *fun, intptr stmt, int nsym);

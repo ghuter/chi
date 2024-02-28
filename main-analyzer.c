@@ -64,6 +64,7 @@ Symbols moddef  = {0};
 Symbols modsym[NMODSYM] = {0};
 
 StmtArray pubsym = {0};
+StmtArray imports = {0};
 
 SymInfo *syminfo = NULL;
 int nsym = 0;
@@ -108,6 +109,7 @@ main(int argc, char *argv[])
 	}
 
 	pubsym.stmts = ftalloc(&ftsym, sizeof(intptr) * pagesz);
+	imports.stmts = ftalloc(&ftsym, sizeof(intptr) * pagesz);
 
 	// -------------------- Alloc lang types
 	int type = -1;
@@ -142,7 +144,7 @@ main(int argc, char *argv[])
 	// -------------------- Parsing
 	int res = -1;
 
-	res = parse_tokens(tlst, &signatures, &identsym, &typesym, modsym, &pubsym);
+	res = parse_tokens(tlst, &signatures, &identsym, &typesym, modsym, &pubsym, &imports);
 	if (res < 0) {
 		ERR("Error when parsing tokens.");
 		return 1;
@@ -152,6 +154,9 @@ main(int argc, char *argv[])
 	intptr info = ftalloc(&ftsym, sizeof(SymInfo) * pagesz);
 	syminfo = (SymInfo*) ftptr(&ftsym, info);
 	nsym = 0;
+
+	assert(analyseimport(&imports));
+	printstmtarray(stdout, &imports);
 
 	Symbol *sym = (Symbol*) ftptr(&ftsym, typesym.array);
 	for (int i = 0; i < typesym.nsym; i++) {

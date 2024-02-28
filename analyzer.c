@@ -3,6 +3,9 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <string.h>
 
 #include "token.h"
 #include "lib/fatarena.h"
@@ -281,6 +284,16 @@ printsymbols(FILE *fd, Symbols *syms)
 	Symbol *sym = (Symbol*) ftptr(&ftsym, syms->array);
 	for (int i = 0; i < syms->nsym; i++) {
 		printstmt(fd, sym[i].stmt);
+		fprintf(fd, "\n");
+	}
+}
+
+void
+printstmtarray(FILE *fd, StmtArray *array)
+{
+	intptr *stmts = (intptr*) ftptr(&ftsym, array->stmts);
+	for (int i = 0; i < array->nstmt; i++) {
+		printstmt(fd, stmts[i]);
 		fprintf(fd, "\n");
 	}
 }
@@ -586,6 +599,68 @@ isgeneric(intptr type)
 {
 	const char* str = identstr(type);
 	return isupper(str[0]) && str[1] == '\0';
+}
+
+int
+searchdotchi(const char* str)
+{
+	int i = 0;
+	while (str[i] != 0) {
+		if (str[i] == '.' && str[i+1] == 'c' && str[i+2] == 'h' && str[i+3] == 'i' && str[i+4] == '\0') {
+			return i;
+		}
+		i++;
+	}
+	return -1;
+}
+
+Bool
+analyseimport(StmtArray *imports)
+{
+	static char buf[256] = {0};
+
+	intptr *stmts = (intptr*) ftptr(&ftsym, imports->stmts);
+	for (int i = 0; i < imports->nstmt; i++) {
+		SImport *import = (SImport*) ftptr(&ftast, stmts[i]);
+		assert(import->kind == SIMPORT);
+
+		const char *path = (char*) ftptr(&ftlit, import->lit);
+		if (!access(path, F_OK)) {
+			ERR("The imported file \"%s\" can't be accessed.", path);
+			return 0;
+		}
+
+		strncpy(buf, path, 256 - 1);
+		int dot = searchdotchi(buf);
+		if (dot < 0) {
+			ERR("The imported file \"%s\" isn't a `.chi` file.", path);
+		}
+
+
+		// ETok *tlst = (ETok*) ftptr(&fttok, 0);
+		// Tok t;
+		// do {
+		// 	t = getnext();
+		// 	ftalloc(&fttok, sizeof(Tok));
+		// 	if (t.type != SPC && t.type != NEWLINE) {
+		// 		tlst[ntok++] = t.type;
+		// 	}
+		// } while (t.type != EOI);
+
+		// // -------------------- Parsing
+		// int res = -1;
+
+		// res = parse_tokens(tlst, &signatures, &identsym, &typesym, modsym, &pubsym, &imports);
+		// if (res < 0) {
+		// 	ERR("Error when parsing tokens.");
+		// 	return 1;
+		// }
+
+
+
+	}
+
+	return 1;
 }
 
 Bool
