@@ -16,6 +16,9 @@ in=/dev/stdin
 
 while [ "$1" ]; do
 	case $1 in
+	-h)
+		usage
+		;;
 	-b)
 		build=1
 		;;
