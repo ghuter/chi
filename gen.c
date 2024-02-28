@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <ctype.h>
+#include <inttypes.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -386,7 +387,7 @@ genexpr(intptr expr)
 		break;
 	case ECSTI: {
 		Csti *csti = (Csti*) ptr;
-		CODEADD("%lld", *((int64_t*) ftptr(&ftimmed, csti->addr)));
+		CODEADD("%"PRId64, *((int64_t*) ftptr(&ftimmed, csti->addr)));
 		break;
 	}
 	case ECSTF: {
@@ -932,7 +933,7 @@ gen(char *code, Symbols typesym, Symbols identsym, Symbols signatures, Symbols f
 	fseek(fp, 0, SEEK_END);
 	fsz = ftell(fp);
 	rewind(fp);
-	fread(hd, 1, fsz, fp);
+	assert(fread(hd, 1, fsz, fp));
 	hd += fsz;
 	fclose(fp);
 	CODEADD("\n");
