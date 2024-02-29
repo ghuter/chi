@@ -493,7 +493,7 @@ genexpr(intptr expr)
 			if (i != 0) {
 				CODEADD(", ");
 			}
-			CODEADD("%s = ", (char*) ftptr(&ftident, elem->ident));
+			CODEADD(".%s = ", (char*) ftptr(&ftident, elem->ident));
 			genexpr(elem->expr);
 			elem++;
 		}
